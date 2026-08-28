@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CopilotKit — Production Readiness Scorecard</title>
+<!--
+  Self-contained interactive scorecard. No dependencies, no backend.
+  CONFIG: edit REPLY_TO and BOOK_URL in the <script> below before shipping.
+  Lead capture without a backend = the "Email my results" button builds a
+  mailto to REPLY_TO with the score summary as the body, so a reply hands you
+  the prospect's full diagnostic + segment.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* CopilotKit brand tokens — internal-skills copilotkit-branding / copilotkit-ui-theme */
+  :root{
+    --bg:#f7f7f9; --panel:#ffffff; --line:#e9e9ef; --line2:#dbdbe5;
+    --ink:#010507; --muted:#57575b; --faint:#838389;
+    --lilac:#BEC2FF; --mint:#85ECCE;
+    --good:#189370; --warn:#FFAC4D; --bad:#FA5F67;
+    --elev-sm:0px 1px 3px 0px rgba(1,5,7,.08);
+    --elev-lg:0px 16px 24px -8px rgba(1,5,7,.12);
+    --mono:"Spline Sans Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font:16px/1.55 "Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ambient edge glows — homepage treatment, kept behind content */
+  .bgfx{position:fixed;inset:0;overflow:hidden;z-index:-1;pointer-events:none}
+  .bgfx i{position:absolute;display:block;border-radius:50%;filter:blur(103px)}
+  .bgfx .g1{width:609px;height:609px;right:-260px;top:-180px;background:#BEC2FF33}
+  .bgfx .g2{width:609px;height:609px;right:-300px;bottom:-240px;background:#85ECCE4D}
+  .bgfx .g3{width:446px;height:446px;left:-220px;top:22%;background:#BEC2FF33}
+  .bgfx .g4{width:609px;height:609px;left:-280px;bottom:-280px;background:#85ECCE4D}
+  .bgfx .g5{width:446px;height:446px;left:30%;top:-280px;background:rgba(255,243,136,.3)}
+  .wrap{max-width:820px;margin:0 auto;padding:32px 20px 120px}
+  .mono{font-family:var(--mono)}
+  a{color:var(--ink)}
+
+  /* header */
+  .brand{display:block;margin:0 0 30px}
+  .brand img{height:30px;display:block}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 12px}
+  h1{font-size:clamp(30px,5vw,40px);line-height:1.15;margin:0 0 10px;letter-spacing:-.02em;font-weight:600}
+  h1 .grad{background:linear-gradient(92deg,#4fd9c4 0%,#57d7c6 22%,#6fa8f5 64%,#8d86f8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);margin:0 0 8px;font-size:17px}
+  .meta{color:var(--faint);font-size:13px;margin-top:14px}
+
+  /* progress */
+  .progress{position:sticky;top:0;z-index:20;background:rgba(247,247,249,.86);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:12px 0;margin:26px 0 8px}
+  .progress .bar{height:6px;background:#e9e9ef;border-radius:99px;overflow:hidden}
+  .progress .fill{height:100%;width:0;background:linear-gradient(90deg,var(--lilac),var(--mint));transition:width .35s ease}
+  .progress .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px}
+  .progress .lbl span:last-child{font-family:var(--mono)}
+
+  /* segment card */
+  .seg{background:var(--panel);border:1px solid var(--line);box-shadow:var(--elev-sm);
+    border-radius:var(--r);padding:20px;margin:22px 0}
+  .seg h2{font-size:15px;margin:0 0 4px;font-weight:600}
+  .seg p{margin:0 0 14px;color:var(--muted);font-size:13px}
+
+  /* sections */
+  .section{margin:34px 0 0}
+  .section-head{display:flex;align-items:center;gap:12px;margin:0 0 6px}
+  .chip{flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:var(--panel);border:1px solid var(--line2);color:var(--muted);font-weight:500;font-size:13px;font-family:var(--mono)}
+  .section-head h3{font-size:17px;margin:0;font-weight:600}
+  .section-head .why{color:var(--faint);font-size:12.5px;margin:2px 0 0}
+
+  .q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;margin:12px 0;box-shadow:var(--elev-sm)}
+  .q.err{border-color:var(--bad);box-shadow:0 0 0 1px rgba(250,95,103,.35)}
+  .q .stmt{font-size:15px;margin:0 0 12px}
+  .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .opt{appearance:none;cursor:pointer;border:1px solid var(--line2);background:#fff;color:var(--ink);
+    padding:9px 14px;border-radius:99px;font-size:13.5px;font-weight:600;font-family:inherit;transition:.15s;user-select:none}
+  .opt:hover{background:#f0f0f4}
+  .opt[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+  .opt.na[aria-pressed="true"]{background:var(--muted);border-color:var(--muted);color:#fff}
+
+  .submit{margin:34px 0 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .btn{appearance:none;cursor:pointer;border:0;border-radius:999px;font-weight:600;font-size:15px;padding:14px 24px;
+    font-family:inherit;background:var(--ink);color:#fff;transition:.15s;box-shadow:var(--elev-sm)}
+  .btn:hover{background:#2b2b2b}
+  .btn.ghost{background:#fff;border:1px solid var(--line2);color:var(--ink);box-shadow:none}
+  .btn.ghost:hover{background:#f0f0f4}
+  .hint{color:var(--faint);font-size:13px}
+
+  /* results */
+  .results{display:none;margin:8px 0 0;animation:rise .5s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .rcard{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px;
+    position:relative;overflow:hidden;box-shadow:var(--elev-lg)}
+  .rcard:before{content:"";position:absolute;inset:-1px;background:radial-gradient(500px 200px at 15% 0,rgba(190,194,255,.25),transparent 60%);pointer-events:none}
+  .rtop{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+  .ring{flex:0 0 auto;width:150px;height:150px;position:relative}
+  .ring .num{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+  .ring .num b{font-size:40px;line-height:1;font-weight:700}
+  .ring .num span{display:block;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+  .rtitle{flex:1;min-width:240px}
+  .tier{font-size:22px;font-weight:700;margin:0 0 4px;color:var(--ink)}
+  .tier.t-good,.tier.t-mid,.tier.t-low{color:var(--ink)}
+  .rtitle p{margin:0;color:var(--muted);font-size:14.5px}
+
+  .ladder{margin:24px 0 0;display:grid;gap:8px}
+  .rung{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;
+    background:#f7f7f9;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .rung.focus{border-color:var(--lilac);box-shadow:0 0 0 1px rgba(190,194,255,.6);background:#BEC2FF1A}
+  .rung .rn{font-weight:500;color:var(--faint);font-size:12px;font-family:var(--mono)}
+  .rung .rname{font-size:14px;font-weight:500}
+  .rung .rname small{display:block;color:var(--faint);font-size:11.5px;font-weight:400}
+  .rung .track{grid-column:2/3;height:6px;background:#e9e9ef;border-radius:99px;overflow:hidden;margin-top:6px}
+  .rung .tk{height:100%;border-radius:99px}
+  .rung .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .rung .tag{grid-column:3/4;font-size:11px;color:var(--ink);font-weight:700}
+
+  .tax{margin:22px 0 0;background:rgba(250,95,103,.06);
+    border:1px solid rgba(250,95,103,.35);border-radius:12px;padding:16px 18px}
+  .tax h4{margin:0 0 6px;font-size:15px;color:var(--ink);font-weight:600}
+  .tax p{margin:0;color:var(--muted);font-size:13.5px}
+  .tax .flags{margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap}
+  .tax .flag{font-size:12px;background:rgba(250,95,103,.12);border:1px solid rgba(250,95,103,.3);color:var(--ink);
+    padding:4px 10px;border-radius:99px;font-weight:600}
+
+  .cta{margin:24px 0 0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .rfoot{margin:18px 0 0;color:var(--faint);font-size:12.5px}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:var(--ink);border:1px solid var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13.5px;
+    transition:.25s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .foot{margin:40px 0 0;color:var(--faint);font-size:12px;text-align:center}
+  details{margin:16px 0 0;color:var(--faint);font-size:12.5px}
+  summary{cursor:pointer;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+<div class="wrap">
+
+  <a class="brand" href="https://www.copilotkit.ai" aria-label="CopilotKit"><img src="logo-full.svg" alt="CopilotKit"></a>
+  <p class="eyebrow">Production Readiness</p>
+  <h1>Is your CopilotKit runtime ready for <span class="grad">production scale</span>?</h1>
+  <p class="sub">14 questions across the five bottlenecks teams actually hit — in the order they hit them. Two minutes, no signup. You get a score, your weakest rung, and the one thing to fix first.</p>
+  <p class="meta">Built by the team that writes the runtime. Nothing you enter leaves your browser.</p>
+
+  <!-- form -->
+  <div id="form">
+    <div class="progress">
+      <div class="lbl"><span>Your progress</span><span id="pcount">0 / 14 answered</span></div>
+      <div class="bar"><div class="fill" id="pfill"></div></div>
+    </div>
+
+    <div class="seg">
+      <h2>Where is your CopilotKit runtime today?</h2>
+      <p>Sets how we read your answers — the risks look different before and after you're live.</p>
+      <div class="opts" data-seg>
+        <button class="opt" type="button" data-seg-val="proto">Prototype / local</button>
+        <button class="opt" type="button" data-seg-val="staging">Staging / pre-prod</button>
+        <button class="opt" type="button" data-seg-val="prod">In production (self-hosted OSS)</button>
+      </div>
+    </div>
+
+    <div id="sections"></div>
+
+    <div class="submit">
+      <button class="btn" id="seeResults" type="button">See my results</button>
+      <span class="hint" id="submitHint">Answer all 14 to score.</span>
+    </div>
+
+    <details>
+      <summary>How it's scored</summary>
+      Each rung is scored by the share of answers that indicate a production-safe setup ("Not sure" counts as partial risk, since unknowns bite in prod). Your overall score is the average across all five rungs. Your <b>weakest rung</b> is the lowest-scoring one — and since teams hit lower rungs first, ties break to the earlier rung. No data is sent anywhere.
+    </details>
+  </div>
+
+  <!-- results -->
+  <div class="results" id="results">
+    <div class="rcard">
+      <div class="rtop">
+        <div class="ring">
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <circle cx="75" cy="75" r="64" fill="none" stroke="#e9e9ef" stroke-width="13"/>
+            <circle id="ringArc" cx="75" cy="75" r="64" fill="none" stroke="#BEC2FF" stroke-width="13"
+              stroke-linecap="round" transform="rotate(-90 75 75)"
+              stroke-dasharray="402" stroke-dashoffset="402" style="transition:stroke-dashoffset 1s ease"/>
+          </svg>
+          <div class="num"><div><b id="scoreNum">0</b><span>/ 100</span></div></div>
+        </div>
+        <div class="rtitle">
+          <div class="tier" id="tier">—</div>
+          <p id="tierNote"></p>
+        </div>
+      </div>
+
+      <div class="ladder" id="ladder"></div>
+
+      <div class="tax" id="tax" style="display:none">
+        <h4>You're already paying for this</h4>
+        <p id="taxCopy"></p>
+        <div class="flags" id="taxFlags"></div>
+      </div>
+
+      <div class="cta">
+        <button class="btn" id="emailBtn" type="button">Email my results to the team</button>
+        <button class="btn ghost" id="copyBtn" type="button">Copy my results</button>
+        <button class="btn ghost" id="retake" type="button">Retake</button>
+      </div>
+      <p class="rfoot" id="rfoot"></p>
+    </div>
+  </div>
+
+  <p class="foot">CopilotKit — production scaling reference. This scorecard runs entirely client-side.</p>
+</div>
+
+<div class="toast" id="toast">Copied.</div>
+
+<script>
+/* ---------- CONFIG (edit before shipping) ---------- */
+const REPLY_TO = "hello@copilotkit.ai";   // where "Email my results" sends
+const BOOK_URL = "#book";                  // 20-min call link
+
+/* ---------- Question model ---------- */
+const RUNGS = [
+  {n:1, name:"Concurrent streaming runs", why:"Connections saturate before CPU — requests hang, not error."},
+  {n:2, name:"Agent + LLM latency & failure", why:"A stalled node or a provider 429 becomes a user-visible hang."},
+  {n:3, name:"CoAgent / agent state", why:"Long or looping agents accumulate memory; a runaway loop leaks."},
+  {n:4, name:"Auth & multi-tenancy", why:"The endpoint is a door straight to your LLM spend."},
+  {n:5, name:"Observability", why:"When a copilot misbehaves, your APM shows a 200 and a long duration."},
+];
+// risk: 0 = production-safe, 1 = risky, 0.5/0.75 = partial. na:true = excluded from score.
+const Q = [
+  {id:"q1", rung:1, stmt:"Your runtime runs stateless across multiple instances behind a load balancer.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q2", rung:1, stmt:"You rely on sticky sessions or a single instance to keep copilot sessions alive.",
+    opts:[["No",0],["Yes",1,"sticky sessions"],["Not sure",0.5]]},
+  {id:"q3", rung:1, stmt:"You know your concurrent-active-runs ceiling per instance.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+
+  {id:"q4", rung:2, stmt:"You have timeouts and backpressure at the runtime boundary.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q5", rung:2, stmt:"A provider 429 or a stalled agent node is caught by retries or failover.",
+    opts:[["Yes",0],["Partly",0.5],["No",1]]},
+  {id:"q6", rung:2, stmt:"You hand-rolled your own retry / failover layer around the runtime.",
+    opts:[["No",0],["Yes",1,"hand-rolled retry"],["Not sure",0.5]]},
+
+  {id:"q7", rung:3, stmt:"Agent / CoAgent state lives outside the runtime process (externalized).",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q8", rung:3, stmt:"Run length / step count is capped to stop a runaway loop.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+
+  {id:"q9", rung:4, stmt:"Your runtime endpoint is authenticated — not an open proxy to your LLM spend.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q10", rung:4, stmt:"You isolate tenants and provider keys per request.",
+    opts:[["Yes",0],["No",1],["Single-tenant / N/A",0,null,true]]},
+  {id:"q11", rung:4, stmt:"You built a custom tenant / guard layer on the endpoint yourself.",
+    opts:[["No",0],["Yes",1,"custom tenant guard"],["Not sure",0.5]]},
+
+  {id:"q12", rung:5, stmt:"You can see per-stage spans inside a streamed run (request → steps → tool calls → render → completion).",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q13", rung:5, stmt:"When a copilot does the wrong thing, you can tell where in the stream it broke.",
+    opts:[["Yes",0],["No",1],["Not sure",0.75]]},
+  {id:"q14", rung:5, stmt:"You track TTFT, concurrent runs / instance, and per-tenant token spend.",
+    opts:[["Yes",0],["Partly",0.5],["No",1]]},
+];
+
+const state = { seg:null, answers:{} }; // answers[id] = {risk, tax|null, na}
+
+/* ---------- Render sections ---------- */
+const secWrap = document.getElementById("sections");
+RUNGS.forEach(r=>{
+  const sec = document.createElement("div");
+  sec.className="section";
+  sec.innerHTML = `<div class="section-head">
+      <div class="chip">0${r.n}</div>
+      <div><h3>${r.name}</h3><div class="why">${r.why}</div></div>
+    </div>`;
+  Q.filter(q=>q.rung===r.n).forEach(q=>{
+    const card=document.createElement("div");
+    card.className="q"; card.id="card-"+q.id;
+    const opts=q.opts.map((o,i)=>{
+      const na=o[3]?"na":"";
+      return `<button class="opt ${na}" type="button" aria-pressed="false"
+        data-q="${q.id}" data-i="${i}">${o[0]}</button>`;
+    }).join("");
+    card.innerHTML=`<p class="stmt">${q.stmt}</p><div class="opts">${opts}</div>`;
+    sec.appendChild(card);
+  });
+  secWrap.appendChild(sec);
+});
+
+/* ---------- Interaction ---------- */
+document.querySelector("[data-seg]").addEventListener("click",e=>{
+  const b=e.target.closest("[data-seg-val]"); if(!b) return;
+  state.seg=b.dataset.segVal;
+  b.parentElement.querySelectorAll(".opt").forEach(x=>x.setAttribute("aria-pressed","false"));
+  b.setAttribute("aria-pressed","true");
+  updateProgress();
+});
+
+secWrap.addEventListener("click",e=>{
+  const b=e.target.closest(".opt"); if(!b) return;
+  const qid=b.dataset.q, i=+b.dataset.i;
+  const q=Q.find(x=>x.id===qid); const o=q.opts[i];
+  state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3]};
+  const card=document.getElementById("card-"+qid);
+  card.classList.remove("err");
+  card.querySelectorAll(".opt").forEach(x=>x.setAttribute("aria-pressed","false"));
+  b.setAttribute("aria-pressed","true");
+  updateProgress();
+});
+
+function answeredCount(){ return Object.keys(state.answers).length; }
+function updateProgress(){
+  const n=answeredCount();
+  document.getElementById("pcount").textContent = `${n} / 14 answered`;
+  document.getElementById("pfill").style.width = (n/14*100)+"%";
+  const ready = n===14 && state.seg;
+  document.getElementById("submitHint").textContent =
+    ready ? "Ready — see your results." : (!state.seg ? "Pick where your runtime is today." : `${14-n} question${14-n===1?"":"s"} left.`);
+}
+
+/* ---------- Scoring ---------- */
+function score(){
+  const per = RUNGS.map(r=>{
+    const qs=Q.filter(q=>q.rung===r.n);
+    let sum=0,cnt=0;
+    qs.forEach(q=>{const a=state.answers[q.id]; if(a && !a.na){sum+=a.risk;cnt++;}});
+    const s = cnt? (1 - sum/cnt) : 1;
+    return {n:r.n, name:r.name, why:r.why, score:s};
+  });
+  const overall = Math.round(per.reduce((a,b)=>a+b.score,0)/per.length*100);
+  // weakest: lowest score, tie -> lowest rung number
+  let weak=per[0];
+  per.forEach(p=>{ if(p.score < weak.score - 1e-9) weak=p; });
+  const flags=[...new Set(Object.values(state.answers).filter(a=>a.tax).map(a=>a.tax))];
+  return {per, overall, weak, flags};
+}
+
+const TIERS=[
+  {min:80, cls:"t-good", label:"Production-hardened",
+   note:"Strong. The runtime layer is doing its job — your remaining risk is mostly operational load, not architecture."},
+  {min:55, cls:"t-mid", label:"Mostly there, with gaps",
+   note:"The bones are right, but at least one rung will bite under real load. Close the weakest one first."},
+  {min:30, cls:"t-low", label:"Exposed at scale",
+   note:"This holds in a demo and gets shaky under concurrency. Fix the rungs in order — lowest first."},
+  {min:0,  cls:"t-low", label:"Fragile under load",
+   note:"Several load-bearing pieces are missing. The good news: the failure modes are known and ordered."},
+];
+function tierFor(v){ return TIERS.find(t=>v>=t.min); }
+function segLabel(){ return {proto:"Prototype / local", staging:"Staging / pre-prod", prod:"In production (self-hosted OSS)"}[state.seg]; }
+function barColor(s){ return s>=.8?"var(--good)":s>=.5?"var(--warn)":"var(--bad)"; }
+
+/* ---------- Results render ---------- */
+function showResults(){
+  const {per, overall, weak, flags}=score();
+  document.getElementById("form").style.display="none";
+  const R=document.getElementById("results"); R.style.display="block";
+
+  // ring + number
+  const arc=document.getElementById("ringArc");
+  const C=2*Math.PI*64;
+  arc.setAttribute("stroke-dasharray", C.toFixed(1));
+  arc.style.stroke = overall>=80?"var(--good)":overall>=55?"var(--warn)":"var(--bad)";
+  requestAnimationFrame(()=>{ arc.style.strokeDashoffset = (C*(1-overall/100)).toFixed(1); });
+  animateNum(document.getElementById("scoreNum"), overall);
+
+  const t=tierFor(overall);
+  const tierEl=document.getElementById("tier");
+  tierEl.textContent=t.label; tierEl.className="tier "+t.cls;
+  document.getElementById("tierNote").textContent = t.note;
+
+  // ladder
+  const lad=document.getElementById("ladder"); lad.innerHTML="";
+  per.forEach(p=>{
+    const focus = p.n===weak.n ? "focus":"";
+    const tag = p.n===weak.n ? `<div class="tag">Fix first ↑</div>` : `<div></div>`;
+    const el=document.createElement("div");
+    el.className="rung "+focus;
+    el.innerHTML=`<div class="rn">0${p.n}</div>
+      <div class="rname">${p.name}<small>${p.why}</small></div>
+      <div class="pct">${Math.round(p.score*100)}%</div>
+      <div class="track" style="grid-column:2/3"><div class="tk" style="width:${Math.round(p.score*100)}%;background:${barColor(p.score)}"></div></div>
+      ${tag}`;
+    lad.appendChild(el);
+  });
+
+  // hidden-tax callout
+  const tax=document.getElementById("tax");
+  if(flags.length){
+    tax.style.display="block";
+    const inProd = state.seg==="prod";
+    document.getElementById("taxCopy").textContent = inProd
+      ? "These are the workarounds teams build when the runtime isn't doing this for them. They work — and you're paying for them in on-call time, a babysat instance, and code you now have to maintain. That's the real cost of self-hosting past the inflection."
+      : "You're already standing up the workarounds teams build to compensate for the runtime. They work in staging — but each one is code you'll own and carry into production.";
+    const fl=document.getElementById("taxFlags"); fl.innerHTML="";
+    flags.forEach(f=>{const s=document.createElement("span");s.className="flag";s.textContent=f;fl.appendChild(s);});
+  } else { tax.style.display="none"; }
+
+  document.getElementById("rfoot").textContent =
+    `Segment: ${segLabel()} · Weakest rung: 0${weak.n} ${weak.name}`;
+
+  // wire CTAs with this run's summary
+  const summary = buildSummary({overall, per, weak, flags});
+  document.getElementById("copyBtn").onclick=()=>copy(summary);
+  document.getElementById("emailBtn").onclick=()=>{
+    const subj=encodeURIComponent(`CopilotKit Production Readiness — ${overall}/100`);
+    const body=encodeURIComponent(summary+"\n\nWhat I'd like help with:\n");
+    location.href=`mailto:${REPLY_TO}?subject=${subj}&body=${body}`;
+  };
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function buildSummary({overall, per, weak, flags}){
+  const t=tierFor(overall);
+  const lines=[
+    `CopilotKit Production Readiness — ${overall}/100 (${t.label})`,
+    `Runtime status: ${segLabel()}`,
+    `Weakest rung: 0${weak.n} ${weak.name}`,
+    `Per rung: ${per.map(p=>`${p.name} ${Math.round(p.score*100)}%`).join(" · ")}`,
+  ];
+  if(flags.length) lines.push(`Workarounds in play: ${flags.join(", ")}`);
+  return lines.join("\n");
+}
+
+function animateNum(el,to){
+  let s=0; const step=Math.max(1,Math.round(to/40));
+  const t=setInterval(()=>{ s+=step; if(s>=to){s=to;clearInterval(t);} el.textContent=s; },18);
+}
+function copy(txt){
+  navigator.clipboard?.writeText(txt).then(()=>toast("Copied your results."),()=>fallbackCopy(txt));
+  if(!navigator.clipboard) fallbackCopy(txt);
+}
+function fallbackCopy(txt){
+  const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();
+  try{document.execCommand("copy");toast("Copied your results.");}catch(e){toast("Press ⌘/Ctrl+C to copy.");}
+  ta.remove();
+}
+let toastT;
+function toast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),1800);}
+
+/* ---------- Submit / retake ---------- */
+document.getElementById("seeResults").addEventListener("click",()=>{
+  if(!state.seg){ toast("Pick where your runtime is today."); document.querySelector(".seg").scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  const missing=Q.filter(q=>!state.answers[q.id]);
+  if(missing.length){
+    missing.forEach(q=>document.getElementById("card-"+q.id).classList.add("err"));
+    document.getElementById("card-"+missing[0].id).scrollIntoView({behavior:"smooth",block:"center"});
+    toast(`${missing.length} question${missing.length===1?"":"s"} left.`);
+    return;
+  }
+  showResults();
+});
+document.getElementById("retake").addEventListener("click",()=>{
+  document.getElementById("results").style.display="none";
+  document.getElementById("form").style.display="block";
+  window.scrollTo({top:0,behavior:"smooth"});
+});
+
+updateProgress();
+</script>
+</body>
+</html>
