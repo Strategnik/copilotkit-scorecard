@@ -16,30 +16,36 @@ Plus Jakarta Sans + Spline Sans Mono details, verified accent palette
 and the authoritative logo asset (sourced from CopilotKit's own brand skills —
 never redrawn).
 
+Floating dock (bottom-center): **Talk to an engineer** (copilotkit.ai/talk-to-an-engineer),
+**Docs**, and **Discord** — same dock as the preference page.
+
 ## Files
 - `index.html` — the scorecard (canonical, deployable at any path)
 - `production-readiness-scorecard.html` — identical copy under a descriptive name
-- `logo-full.svg` — official CopilotKit logo (referenced by the page)
+- `logo-full.svg` / `logo-mark.svg` — official CopilotKit logo (header + favicon)
 - `vercel.json` — static hosting config (clean URLs + basic security headers)
-- `_previews/` — reference screenshots (form + result; `brand-*.png` = current brand)
+- `_previews/` — reference screenshots (`brand-*.png` = current brand; `scorecard-*.png` = pre-brand originals)
 
-## Configure before shipping (30 seconds)
-Open `index.html`, find the `CONFIG` block near the top of `<script>`:
+## Configure before shipping (already set — verify only)
+The `CONFIG` block near the top of `<script>` in `index.html`:
 ```js
 const REPLY_TO = "hello@copilotkit.ai";   // where "Email my results" sends
-const BOOK_URL = "#book";                  // 20-min call link
+const BOOK_URL = "https://www.copilotkit.ai/talk-to-an-engineer";  // 20-min call link
 ```
-- `REPLY_TO` — the inbox that should receive scorecard results (the "Email my results"
-  button builds a mailto with the full diagnostic + segment prefilled, so a reply is your
-  lead capture — no backend required).
-- `BOOK_URL` — your booking link (Cal.com / Calendly / etc.).
+- `REPLY_TO` — the inbox that receives scorecard results (the "Email my results" button
+  builds a mailto with the full diagnostic + segment prefilled, so a reply is your lead
+  capture — no backend required). Change it if a different inbox should own these.
+- `BOOK_URL` — points at Talk to an Engineer; swap if a dedicated booking link is preferred.
+- The dock links (talk-to-an-engineer / docs.copilotkit.ai / discord.gg/copilotkit) are
+  hardcoded in the `<nav class="dock">` at the bottom of the file.
 
 ## Host it on the CopilotKit site
-It's a single static file — host it however the site serves static assets:
-- **Next.js (app or pages):** drop `index.html` into `/public/scorecard/index.html`
-  → live at `yoursite.com/scorecard`. (It's plain HTML, so keep it in `public/`, not as a
-  React route.)
-- **Any static host / CDN:** upload `index.html` to a `/scorecard` path. Done.
+Static files only — host however the site serves static assets:
+- **Next.js (app or pages):** drop `index.html` + both logo SVGs into
+  `/public/scorecard/` → live at `yoursite.com/scorecard`. (Plain HTML — keep it in
+  `public/`, not as a React route.)
+- **Any static host / CDN:** upload `index.html` + the two logo SVGs to a `/scorecard`
+  path, keeping relative paths. Done.
 - **Embed:** it's also iframe-safe if you'd rather drop it into an existing page.
 
 No env vars, no server routes, no dependencies to install.
