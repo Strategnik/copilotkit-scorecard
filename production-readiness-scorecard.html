@@ -178,8 +178,8 @@
   <a class="brand" href="https://www.copilotkit.ai" aria-label="CopilotKit"><img src="logo-full.svg" alt="CopilotKit"></a>
   <p class="eyebrow">Production Readiness</p>
   <h1>Is your CopilotKit runtime ready for <span class="grad">production scale</span>?</h1>
-  <p class="sub">14 questions across the five bottlenecks teams actually hit — in the order they hit them. Two minutes, no signup. You get a score, your weakest rung, and the one thing to fix first.</p>
-  <p class="meta">Built by the team that writes the runtime. Nothing you enter leaves your browser.</p>
+  <p class="sub">14 questions across five common production bottlenecks we see. Two minutes, no signup. You get a score, your weakest rung, and the one thing to fix first.</p>
+  <p class="meta">Built by the team that writes the runtime. Your answers stay in this browser unless you choose to email them.</p>
 
   <!-- form -->
   <div id="form">
@@ -190,7 +190,7 @@
 
     <div class="seg">
       <h2>Where is your CopilotKit runtime today?</h2>
-      <p>Sets how we read your answers — the risks look different before and after you're live.</p>
+      <p>Helps tailor your results — the risks look different before and after you're live.</p>
       <div class="opts" data-seg>
         <button class="opt" type="button" data-seg-val="proto">Prototype / local</button>
         <button class="opt" type="button" data-seg-val="staging">Staging / pre-prod</button>
@@ -207,7 +207,7 @@
 
     <details>
       <summary>How it's scored</summary>
-      Each rung is scored by the share of answers that indicate a production-safe setup ("Not sure" counts as partial risk, since unknowns bite in prod). Your overall score is the average across all five rungs. Your <b>weakest rung</b> is the lowest-scoring one — and since teams hit lower rungs first, ties break to the earlier rung. No data is sent anywhere.
+      Each rung is scored by the share of answers that indicate a production-safe setup ("Not sure" counts as partial risk, since unknowns bite in prod). Questions about who maintains a layer don't affect your score — they only inform the responsibilities callout. Your overall score is the average across all five rungs. Your <b>weakest rung</b> is the lowest-scoring one — and since teams hit lower rungs first, ties break to the earlier rung. Scoring runs entirely in your browser; nothing is sent unless you choose to email or copy your results.
     </details>
   </div>
 
@@ -261,7 +261,7 @@ const BOOK_URL = "https://www.copilotkit.ai/talk-to-an-engineer";  // 20-min cal
 const RUNGS = [
   {n:1, name:"Concurrent streaming runs", why:"Connections saturate before CPU — requests hang, not error."},
   {n:2, name:"Agent + LLM latency & failure", why:"A stalled node or a provider 429 becomes a user-visible hang."},
-  {n:3, name:"CoAgent / agent state", why:"Long or looping agents accumulate memory; a runaway loop leaks."},
+  {n:3, name:"CoAgent / agent state", why:"In-process state disappears on restart and isn't shared across instances."},
   {n:4, name:"Auth & multi-tenancy", why:"The endpoint is a door straight to your LLM spend."},
   {n:5, name:"Observability", why:"When a copilot misbehaves, your APM shows a 200 and a long duration."},
 ];
@@ -278,8 +278,8 @@ const Q = [
     opts:[["Yes",0],["No",1],["Not sure",0.75]]},
   {id:"q5", rung:2, stmt:"A provider 429 or a stalled agent node is caught by retries or failover.",
     opts:[["Yes",0],["Partly",0.5],["No",1]]},
-  {id:"q6", rung:2, stmt:"You hand-rolled your own retry / failover layer around the runtime.",
-    opts:[["No",0],["Yes",1,"hand-rolled retry"],["Not sure",0.5]]},
+  {id:"q6", rung:2, stmt:"Your team builds and maintains its own retry / failover layer around the runtime.",
+    opts:[["No",0,null,true],["Yes",0,"self-maintained retry/failover",true],["Not sure",0,null,true]]},
 
   {id:"q7", rung:3, stmt:"Agent / CoAgent state lives outside the runtime process (externalized).",
     opts:[["Yes",0],["No",1],["Not sure",0.75]]},
@@ -290,8 +290,8 @@ const Q = [
     opts:[["Yes",0],["No",1],["Not sure",0.75]]},
   {id:"q10", rung:4, stmt:"You isolate tenants and provider keys per request.",
     opts:[["Yes",0],["No",1],["Single-tenant / N/A",0,null,true]]},
-  {id:"q11", rung:4, stmt:"You built a custom tenant / guard layer on the endpoint yourself.",
-    opts:[["No",0],["Yes",1,"custom tenant guard"],["Not sure",0.5]]},
+  {id:"q11", rung:4, stmt:"Your team builds and maintains its own auth / tenant guard layer on the endpoint.",
+    opts:[["No",0,null,true],["Yes",0,"self-maintained auth/tenant guard",true],["Not sure",0,null,true]]},
 
   {id:"q12", rung:5, stmt:"You can see per-stage spans inside a streamed run (request → steps → tool calls → render → completion).",
     opts:[["Yes",0],["No",1],["Not sure",0.75]]},
@@ -384,7 +384,13 @@ const TIERS=[
   {min:0,  cls:"t-low", label:"Fragile under load",
    note:"Several load-bearing pieces are missing. The good news: the failure modes are known and ordered."},
 ];
-function tierFor(v){ return TIERS.find(t=>v>=t.min); }
+function tierFor(v, per){
+  let t = TIERS.find(t=>v>=t.min);
+  // Never show the top tier if any single rung is below 50% — a hardened
+  // system doesn't have a half-broken rung.
+  if(per && t===TIERS[0] && per.some(p=>p.score<0.5)) t=TIERS[1];
+  return t;
+}
 function segLabel(){ return {proto:"Prototype / local", staging:"Staging / pre-prod", prod:"In production (self-hosted OSS)"}[state.seg]; }
 function barColor(s){ return s>=.8?"var(--good)":s>=.5?"var(--warn)":"var(--bad)"; }
 
@@ -394,24 +400,26 @@ function showResults(){
   document.getElementById("form").style.display="none";
   const R=document.getElementById("results"); R.style.display="block";
 
+  const t=tierFor(overall, per);
+
   // ring + number
   const arc=document.getElementById("ringArc");
   const C=2*Math.PI*64;
   arc.setAttribute("stroke-dasharray", C.toFixed(1));
-  arc.style.stroke = overall>=80?"var(--good)":overall>=55?"var(--warn)":"var(--bad)";
+  arc.style.stroke = t.cls==="t-good"?"var(--good)":t.cls==="t-mid"?"var(--warn)":"var(--bad)";
   requestAnimationFrame(()=>{ arc.style.strokeDashoffset = (C*(1-overall/100)).toFixed(1); });
   animateNum(document.getElementById("scoreNum"), overall);
 
-  const t=tierFor(overall);
   const tierEl=document.getElementById("tier");
   tierEl.textContent=t.label; tierEl.className="tier "+t.cls;
   document.getElementById("tierNote").textContent = t.note;
 
-  // ladder
+  // ladder — at a perfect score there's nothing to fix, so skip the callout
+  const perfect = weak.score > 0.999;
   const lad=document.getElementById("ladder"); lad.innerHTML="";
   per.forEach(p=>{
-    const focus = p.n===weak.n ? "focus":"";
-    const tag = p.n===weak.n ? `<div class="tag">Fix first ↑</div>` : `<div></div>`;
+    const focus = (!perfect && p.n===weak.n) ? "focus":"";
+    const tag = (!perfect && p.n===weak.n) ? `<div class="tag">Fix first ↑</div>` : `<div></div>`;
     const el=document.createElement("div");
     el.className="rung "+focus;
     el.innerHTML=`<div class="rn">0${p.n}</div>
@@ -428,14 +436,14 @@ function showResults(){
     tax.style.display="block";
     const inProd = state.seg==="prod";
     document.getElementById("taxCopy").textContent = inProd
-      ? "These are the workarounds teams build when the runtime isn't doing this for them. They work — and you're paying for them in on-call time, a babysat instance, and code you now have to maintain. That's the real cost of self-hosting past the inflection."
-      : "You're already standing up the workarounds teams build to compensate for the runtime. They work in staging — but each one is code you'll own and carry into production.";
+      ? "These are production responsibilities your team currently owns around the runtime. They work — and you're paying for them in on-call time, a babysat instance, and code you now have to maintain. That's the real cost of self-hosting past the inflection."
+      : "These are production responsibilities your team is taking on around the runtime. They work in staging — but each one is code you'll own and carry into production.";
     const fl=document.getElementById("taxFlags"); fl.innerHTML="";
     flags.forEach(f=>{const s=document.createElement("span");s.className="flag";s.textContent=f;fl.appendChild(s);});
   } else { tax.style.display="none"; }
 
   document.getElementById("rfoot").textContent =
-    `Segment: ${segLabel()} · Weakest rung: 0${weak.n} ${weak.name}`;
+    `Segment: ${segLabel()} · ` + (perfect ? "All five rungs at 100%" : `Weakest rung: 0${weak.n} ${weak.name}`);
 
   // wire CTAs with this run's summary
   const summary = buildSummary({overall, per, weak, flags});
@@ -449,14 +457,14 @@ function showResults(){
 }
 
 function buildSummary({overall, per, weak, flags}){
-  const t=tierFor(overall);
+  const t=tierFor(overall, per);
   const lines=[
     `CopilotKit Production Readiness — ${overall}/100 (${t.label})`,
     `Runtime status: ${segLabel()}`,
-    `Weakest rung: 0${weak.n} ${weak.name}`,
+    weak.score > 0.999 ? "All five rungs at 100%" : `Weakest rung: 0${weak.n} ${weak.name}`,
     `Per rung: ${per.map(p=>`${p.name} ${Math.round(p.score*100)}%`).join(" · ")}`,
   ];
-  if(flags.length) lines.push(`Workarounds in play: ${flags.join(", ")}`);
+  if(flags.length) lines.push(`Layers your team maintains: ${flags.join(", ")}`);
   return lines.join("\n");
 }
 

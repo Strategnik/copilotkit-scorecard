@@ -3,10 +3,13 @@
 A self-contained, interactive lead asset: 14 questions across the five production
 bottlenecks → a score, the reader's weakest rung, and a "fix first" recommendation.
 Self-segments by runtime status (prototype / staging / in-prod OSS) and surfaces a
-"hidden tax" callout for teams already running self-hosted workarounds.
+callout listing the production responsibilities the team currently owns around the
+runtime (self-maintained retry/failover, auth/tenant guard). Ownership questions
+inform that callout only — they never affect the readiness score. The top tier
+("Production-hardened") is suppressed whenever any single rung scores below 50%.
 
-**One file. No build, no dependencies, no backend.** Everything runs client-side; nothing
-the user enters leaves their browser.
+**One file. No build, no dependencies, no backend.** Scoring runs entirely client-side;
+answers stay in the browser unless the user chooses to email or copy their results.
 
 Styled with CopilotKit's official brand system (from the `copilotkit-branding` +
 `copilotkit-ui-theme` skills in `CopilotKit/internal-skills`): light `#f7f7f9` surface
