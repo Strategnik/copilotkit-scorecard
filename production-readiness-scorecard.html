@@ -19,7 +19,7 @@
   /* CopilotKit brand tokens — internal-skills copilotkit-branding / copilotkit-ui-theme */
   :root{
     --bg:#f7f7f9; --panel:#ffffff; --line:#e9e9ef; --line2:#dbdbe5;
-    --ink:#010507; --muted:#57575b; --faint:#838389;
+    --ink:#010507; --muted:#57575b; --faint:#6f6f76;
     --lilac:#BEC2FF; --mint:#85ECCE;
     --good:#189370; --warn:#FFAC4D; --bad:#FA5F67;
     --elev-sm:0px 1px 3px 0px rgba(1,5,7,.08);
@@ -51,10 +51,19 @@
   .brand{display:block;margin:0 0 30px}
   .brand img{height:30px;display:block}
   .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 12px}
-  h1{font-size:clamp(30px,5vw,40px);line-height:1.15;margin:0 0 10px;letter-spacing:-.02em;font-weight:600}
-  h1 .grad{background:linear-gradient(92deg,#4fd9c4 0%,#57d7c6 22%,#6fa8f5 64%,#8d86f8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{color:var(--muted);margin:0 0 8px;font-size:17px}
-  .meta{color:var(--faint);font-size:13px;margin-top:14px}
+  h1{font-size:clamp(30px,5vw,40px);line-height:1.15;margin:0 0 10px;letter-spacing:-.02em;font-weight:600;text-wrap:balance}
+  /* brand rule: gradients are ambient support behind content, never the text's
+     contrast mechanism — so the accent is a marker sweep under ink text */
+  h1 .grad{
+    background:linear-gradient(90deg,rgba(190,194,255,.65),rgba(133,236,206,.7));
+    background-repeat:no-repeat;background-size:100% .42em;background-position:0 92%;
+    padding:0 .06em;border-radius:2px;
+  }
+  .sub{color:var(--muted);margin:0 0 8px;font-size:17px;text-wrap:pretty}
+  .facts{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0}
+  .facts span{font-family:var(--mono);font-size:12px;color:var(--muted);
+    padding:4px 11px;border:1px solid var(--line2);border-radius:99px;background:rgba(255,255,255,.65)}
+  .meta{color:var(--faint);font-size:13px;margin-top:12px}
 
   /* progress */
   .progress{position:sticky;top:0;z-index:20;background:rgba(247,247,249,.86);backdrop-filter:blur(8px);
@@ -74,7 +83,10 @@
   .section{margin:34px 0 0}
   .section-head{display:flex;align-items:center;gap:12px;margin:0 0 6px}
   .chip{flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
-    background:var(--panel);border:1px solid var(--line2);color:var(--muted);font-weight:500;font-size:13px;font-family:var(--mono)}
+    background:var(--panel);border:1px solid var(--line2);color:var(--muted);font-weight:500;font-size:13px;font-family:var(--mono);
+    transition:background .2s,border-color .2s,color .2s}
+  /* rung fully answered = check passes, CI-style */
+  .chip.done{background:rgba(133,236,206,.35);border-color:var(--good);color:#0b5c46;animation:pop .3s cubic-bezier(.22,1,.36,1)}
   .section-head h3{font-size:17px;margin:0;font-weight:600}
   .section-head .why{color:var(--faint);font-size:12.5px;margin:2px 0 0}
 
@@ -85,13 +97,19 @@
   .opt{appearance:none;cursor:pointer;border:1px solid var(--line2);background:#fff;color:var(--ink);
     padding:9px 14px;border-radius:99px;font-size:13.5px;font-weight:600;font-family:inherit;transition:.15s;user-select:none}
   .opt:hover{background:#f0f0f4}
+  .opt:active{transform:scale(.96)}
+  .opt:focus-visible,.btn:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
   .opt[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
   .opt.na[aria-pressed="true"]{background:var(--muted);border-color:var(--muted);color:#fff}
+  .opt.picked{animation:pop .28s cubic-bezier(.22,1,.36,1)}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(.93)}100%{transform:scale(1)}}
 
   .submit{margin:34px 0 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
   .btn{appearance:none;cursor:pointer;border:0;border-radius:999px;font-weight:600;font-size:15px;padding:14px 24px;
     font-family:inherit;background:var(--ink);color:#fff;transition:.15s;box-shadow:var(--elev-sm)}
   .btn:hover{background:#2b2b2b}
+  /* all 14 answered + segment picked — make the next step unmissable */
+  .btn.ready{box-shadow:0 0 0 3px rgba(133,236,206,.55),var(--elev-sm)}
   .btn.ghost{background:#fff;border:1px solid var(--line2);color:var(--ink);box-shadow:none}
   .btn.ghost:hover{background:#f0f0f4}
   .hint{color:var(--faint);font-size:13px}
@@ -121,7 +139,14 @@
   .rung .rname small{display:block;color:var(--faint);font-size:11.5px;font-weight:400}
   .rung .track{grid-column:2/3;height:6px;background:#e9e9ef;border-radius:99px;overflow:hidden;margin-top:6px}
   .rung .tk{height:100%;border-radius:99px}
-  .rung .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .rung .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);font-family:var(--mono);
+    display:inline-flex;align-items:center;gap:8px}
+  .st{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    font-weight:600;color:var(--ink);padding:3px 8px;border-radius:99px;border:1px solid var(--line2);background:#fff}
+  .st:before{content:"";width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .st.ok:before{background:var(--good)}
+  .st.wn:before{background:var(--warn)}
+  .st.bd:before{background:var(--bad)}
   .rung .tag{grid-column:3/4;font-size:11px;color:var(--ink);font-weight:700}
 
   .tax{margin:22px 0 0;background:rgba(250,95,103,.06);
@@ -169,6 +194,11 @@
     .dockbtn{height:40px;padding:0 12px}
     .dlabel{font-size:12px}
   }
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    html{scroll-behavior:auto}
+  }
 </style>
 </head>
 <body>
@@ -178,7 +208,8 @@
   <a class="brand" href="https://www.copilotkit.ai" aria-label="CopilotKit"><img src="logo-full.svg" alt="CopilotKit"></a>
   <p class="eyebrow">Production Readiness</p>
   <h1>Is your CopilotKit runtime ready for <span class="grad">production scale</span>?</h1>
-  <p class="sub">14 questions across five common production bottlenecks we see. Two minutes, no signup. You get a score, your weakest rung, and the one thing to fix first.</p>
+  <p class="sub">14 questions across five common production bottlenecks we see. You get a score, your weakest rung, and the one thing to fix first.</p>
+  <div class="facts" aria-label="What to expect"><span>~2 min</span><span>no signup</span><span>runs locally</span></div>
   <p class="meta">Built by the team that writes the runtime. Your answers stay in this browser unless you choose to email them.</p>
 
   <!-- form -->
@@ -309,7 +340,7 @@ RUNGS.forEach(r=>{
   const sec = document.createElement("div");
   sec.className="section";
   sec.innerHTML = `<div class="section-head">
-      <div class="chip">0${r.n}</div>
+      <div class="chip" id="chip-${r.n}">0${r.n}</div>
       <div><h3>${r.name}</h3><div class="why">${r.why}</div></div>
     </div>`;
   Q.filter(q=>q.rung===r.n).forEach(q=>{
@@ -342,8 +373,9 @@ secWrap.addEventListener("click",e=>{
   state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3]};
   const card=document.getElementById("card-"+qid);
   card.classList.remove("err");
-  card.querySelectorAll(".opt").forEach(x=>x.setAttribute("aria-pressed","false"));
+  card.querySelectorAll(".opt").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.remove("picked");});
   b.setAttribute("aria-pressed","true");
+  void b.offsetWidth; b.classList.add("picked");
   updateProgress();
 });
 
@@ -352,7 +384,14 @@ function updateProgress(){
   const n=answeredCount();
   document.getElementById("pcount").textContent = `${n} / 14 answered`;
   document.getElementById("pfill").style.width = (n/14*100)+"%";
+  RUNGS.forEach(r=>{
+    const done = Q.filter(q=>q.rung===r.n).every(q=>state.answers[q.id]);
+    const chip = document.getElementById("chip-"+r.n);
+    if(done && !chip.classList.contains("done")){ chip.classList.add("done"); chip.textContent="✓"; }
+    else if(!done && chip.classList.contains("done")){ chip.classList.remove("done"); chip.textContent="0"+r.n; }
+  });
   const ready = n===14 && state.seg;
+  document.getElementById("seeResults").classList.toggle("ready", !!ready);
   document.getElementById("submitHint").textContent =
     ready ? "Ready — see your results." : (!state.seg ? "Pick where your runtime is today." : `${14-n} question${14-n===1?"":"s"} left.`);
 }
@@ -407,6 +446,7 @@ function showResults(){
   const C=2*Math.PI*64;
   arc.setAttribute("stroke-dasharray", C.toFixed(1));
   arc.style.stroke = t.cls==="t-good"?"var(--good)":t.cls==="t-mid"?"var(--warn)":"var(--bad)";
+  arc.style.filter = t.cls==="t-good"?"drop-shadow(0 0 6px rgba(24,147,112,.35))":"";
   requestAnimationFrame(()=>{ arc.style.strokeDashoffset = (C*(1-overall/100)).toFixed(1); });
   animateNum(document.getElementById("scoreNum"), overall);
 
@@ -417,17 +457,20 @@ function showResults(){
   // ladder — at a perfect score there's nothing to fix, so skip the callout
   const perfect = weak.score > 0.999;
   const lad=document.getElementById("ladder"); lad.innerHTML="";
-  per.forEach(p=>{
+  per.forEach((p,i)=>{
     const focus = (!perfect && p.n===weak.n) ? "focus":"";
     const tag = (!perfect && p.n===weak.n) ? `<div class="tag">Fix first ↑</div>` : `<div></div>`;
+    const st = p.score>=.8 ? ["ok","PASS"] : p.score>=.5 ? ["wn","WARN"] : ["bd","FAIL"];
+    const pct = Math.round(p.score*100);
     const el=document.createElement("div");
     el.className="rung "+focus;
     el.innerHTML=`<div class="rn">0${p.n}</div>
       <div class="rname">${p.name}<small>${p.why}</small></div>
-      <div class="pct">${Math.round(p.score*100)}%</div>
-      <div class="track" style="grid-column:2/3"><div class="tk" style="width:${Math.round(p.score*100)}%;background:${barColor(p.score)}"></div></div>
+      <div class="pct"><span class="st ${st[0]}">${st[1]}</span>${pct}%</div>
+      <div class="track" style="grid-column:2/3"><div class="tk" style="width:0;background:${barColor(p.score)};transition:width .7s cubic-bezier(.22,1,.36,1) ${i*90}ms"></div></div>
       ${tag}`;
     lad.appendChild(el);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.querySelector(".tk").style.width=pct+"%"; }));
   });
 
   // hidden-tax callout
