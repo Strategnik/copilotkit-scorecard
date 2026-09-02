@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>CopilotKit — Production Readiness Scorecard</title>
 <link rel="icon" type="image/svg+xml" href="logo-mark.svg">
 <!--
@@ -70,15 +71,17 @@
   .progress{position:sticky;top:0;z-index:20;background:rgba(247,247,249,.86);backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);padding:12px 0;margin:26px 0 8px}
   .progress .bar{height:6px;background:#e9e9ef;border-radius:99px;overflow:hidden}
-  .progress .fill{height:100%;width:0;background:linear-gradient(90deg,var(--lilac),var(--mint));transition:width .35s ease}
+  .progress .fill{height:100%;width:100%;transform:scaleX(0);transform-origin:left;background:linear-gradient(90deg,var(--lilac),var(--mint));transition:transform .35s ease}
   .progress .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px}
   .progress .lbl span:last-child{font-family:var(--mono)}
 
   /* segment card */
   .seg{background:var(--panel);border:1px solid var(--line);box-shadow:var(--elev-sm);
     border-radius:var(--r);padding:20px;margin:22px 0}
+  .seg.err{border-color:var(--bad);box-shadow:0 0 0 1px rgba(250,95,103,.35)}
   .seg h2{font-size:15px;margin:0 0 4px;font-weight:600}
   .seg p{margin:0 0 14px;color:var(--muted);font-size:13px}
+  .seg .field-error,.q .field-error{margin:10px 0 0;color:var(--ink);font-size:13px;font-weight:600}
 
   /* sections — Swiss-style numbered index: the rung numeral is a composition
      element, with a hairline rule extending to the margin */
@@ -141,7 +144,7 @@
   .rung .rname{font-size:14px;font-weight:500}
   .rung .rname small{display:block;color:var(--faint);font-size:11.5px;font-weight:400}
   .rung .track{grid-column:2/3;height:6px;background:#e9e9ef;border-radius:99px;overflow:hidden;margin-top:6px}
-  .rung .tk{height:100%;border-radius:99px}
+  .rung .tk{height:100%;width:100%;transform:scaleX(0);transform-origin:left;border-radius:99px}
   .rung .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);font-family:var(--mono);
     display:inline-flex;align-items:center;gap:8px}
   .st{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
@@ -208,28 +211,29 @@
 <div class="bgfx" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
 <div class="wrap">
 
-  <a class="brand" href="https://www.copilotkit.ai" aria-label="CopilotKit"><img src="logo-full.svg" alt="CopilotKit"></a>
+  <a class="brand" href="https://www.copilotkit.ai" target="_top" aria-label="CopilotKit"><img src="logo-full.svg" alt="CopilotKit"></a>
   <p class="eyebrow">Production Readiness</p>
   <h1>Is your CopilotKit runtime ready for <span class="grad">production scale</span>?</h1>
   <p class="sub">14 questions across five common production bottlenecks we see. You get a score, your weakest rung, and the one thing to fix first.</p>
-  <div class="facts" aria-label="What to expect"><span>~2 min</span><span>no signup</span><span>runs locally</span></div>
+  <div class="facts" role="list" aria-label="What to expect"><span role="listitem">~2 min</span><span role="listitem">no signup</span><span role="listitem">runs locally</span></div>
   <p class="meta">Built by the team that writes the runtime. Your answers stay in this browser unless you choose to email them.</p>
 
   <!-- form -->
   <div id="form">
     <div class="progress">
-      <div class="lbl"><span>Your progress</span><span id="pcount">0 / 14 answered</span></div>
-      <div class="bar"><div class="fill" id="pfill"></div></div>
+      <div class="lbl"><span id="progressLabel">Your progress</span><span id="pcount">0 / 14 answered</span></div>
+      <div class="bar" role="progressbar" aria-labelledby="progressLabel" aria-describedby="pcount" aria-valuemin="0" aria-valuemax="14" aria-valuenow="0" aria-valuetext="0 of 14 questions answered"><div class="fill" id="pfill" aria-hidden="true"></div></div>
     </div>
 
     <div class="seg">
-      <h2>Where is your CopilotKit runtime today?</h2>
+      <h2 id="segment-question" tabindex="-1">Where is your CopilotKit runtime today?</h2>
       <p>Helps tailor your results — the risks look different before and after you're live.</p>
-      <div class="opts" data-seg>
+      <div class="opts" data-seg role="group" aria-labelledby="segment-question">
         <button class="opt" type="button" data-seg-val="proto">Prototype / local</button>
         <button class="opt" type="button" data-seg-val="staging">Staging / pre-prod</button>
         <button class="opt" type="button" data-seg-val="prod">In production (self-hosted OSS)</button>
       </div>
+      <p class="field-error" id="segment-error" hidden>Choose where your runtime is today.</p>
     </div>
 
     <div id="sections"></div>
@@ -246,11 +250,11 @@
   </div>
 
   <!-- results -->
-  <div class="results" id="results">
+  <section class="results" id="results" aria-labelledby="tier">
     <div class="rcard">
       <div class="rtop">
         <div class="ring">
-          <svg width="150" height="150" viewBox="0 0 150 150">
+          <svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true" focusable="false">
             <circle cx="75" cy="75" r="64" fill="none" stroke="#e9e9ef" stroke-width="13"/>
             <circle id="ringArc" cx="75" cy="75" r="64" fill="none" stroke="#BEC2FF" stroke-width="13"
               stroke-linecap="round" transform="rotate(-90 75 75)"
@@ -259,7 +263,7 @@
           <div class="num"><div><b id="scoreNum">0</b><span>/ 100</span></div></div>
         </div>
         <div class="rtitle">
-          <div class="tier" id="tier">—</div>
+          <h2 class="tier" id="tier" tabindex="-1">—</h2>
           <p id="tierNote"></p>
         </div>
       </div>
@@ -279,17 +283,99 @@
       </div>
       <p class="rfoot" id="rfoot"></p>
     </div>
-  </div>
+  </section>
 
   <p class="foot">CopilotKit — production scaling reference. This scorecard runs entirely client-side.</p>
 </div>
 
-<div class="toast" id="toast">Copied.</div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">Copied.</div>
 
 <script>
 /* ---------- CONFIG (edit before shipping) ---------- */
 const REPLY_TO = "hello@copilotkit.ai";   // where "Email my results" sends
+const PORTAL_ID = "45532593";
+const FORM_GUID = "0eaf83fd-4bf2-418e-9d37-afcbfc9ee729"; // Scorecard · Production Readiness Results (silent capture)
+const HUBSPOT_COOKIE_WAIT_MS = 2000;
+const HUBSPOT_COOKIE_POLL_MS = 100;
+/* Recipient email: own ?email= param, else the parent page URL (same-origin iframe).
+   No email -> results stay local, nothing is recorded (matches the preference page). */
+function resolveVisitorEmail(){
+  let raw = new URLSearchParams(location.search).get("email");
+  if(!raw && window.parent!==window){
+    try{ raw = new URLSearchParams(window.parent.location.search).get("email"); }catch(e){}
+  }
+  const e=(raw||"").trim().toLowerCase();
+  return (e && e.length<=320) ? e : "";
+}
+const visitorEmail = resolveVisitorEmail();
+function readHubspotCookie(){
+  return document.cookie.match(/(?:^|; )hubspotutk=([^;]+)/)?.[1] || null;
+}
+async function waitForHubspotCookie(){
+  const existing=readHubspotCookie();
+  if(existing) return existing;
+  const deadline=Date.now()+HUBSPOT_COOKIE_WAIT_MS;
+  while(Date.now()<deadline){
+    await new Promise(r=>setTimeout(r,HUBSPOT_COOKIE_POLL_MS));
+    const hutk=readHubspotCookie();
+    if(hutk) return hutk;
+  }
+  return null;
+}
+const TIER_VALUES={"Production-hardened":"production_hardened","Mostly there, with gaps":"mostly_there",
+  "Exposed at scale":"exposed_at_scale","Fragile under load":"fragile_under_load"};
+let lastSavedPayload = null;
+async function saveResults({overall, per, weak, flags, t, summary}){
+  if(!visitorEmail) return;
+  const detailLines=[summary,"","Answers:"];
+  Q.forEach(q=>{
+    const a=state.answers[q.id];
+    detailLines.push(`${q.id}. ${q.stmt} -> ${a && a.label ? a.label : "(unanswered)"}`);
+  });
+  const perfect = weak.score > 0.999;
+  const fields=[
+    {name:"email", value:visitorEmail},
+    {name:"cpk_scorecard_score", value:String(overall)},
+    {name:"cpk_scorecard_tier", value:TIER_VALUES[t.label]||t.label},
+    {name:"cpk_scorecard_segment", value:state.seg},
+    {name:"cpk_scorecard_weakest_rung", value:perfect ? "none" : ("rung_"+weak.n)},
+    {name:"cpk_scorecard_maintained_layers", value:flags.join(", ")},
+    {name:"cpk_scorecard_results_detail", value:detailLines.join("\n")},
+  ];
+  const key=JSON.stringify(fields);
+  if(key===lastSavedPayload) return;      // same run re-rendered — skip duplicate
+  const hutk=await waitForHubspotCookie();
+  const context={pageUri:window.parent===window?location.href:window.parent.location.href,
+                 pageName:"Production Readiness Scorecard — CopilotKit"};
+  if(hutk) context.hutk=hutk;
+  try{
+    const res=await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${PORTAL_ID}/${FORM_GUID}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({fields, context})});
+    if(res.ok) lastSavedPayload=key;
+  }catch(e){/* capture is best-effort; results UX never blocks on it */}
+}
 const BOOK_URL = "https://www.copilotkit.ai/talk-to-an-engineer";  // 20-min call link
+let scorecardStarted = false;
+const reducedMotionQuery=typeof window.matchMedia==="function"
+  ? window.matchMedia("(prefers-reduced-motion: reduce)")
+  : {matches:false};
+function prefersReducedMotion(){return reducedMotionQuery.matches;}
+function revealFocusedElement(element, block="center"){
+  element.focus({preventScroll:true});
+  element.scrollIntoView({behavior:prefersReducedMotion()?"auto":"smooth",block});
+}
+function scrollToPageTop(){window.scrollTo({top:0,behavior:prefersReducedMotion()?"auto":"smooth"});}
+
+function emitCampaignEvent(event, properties={}){
+  if(window.parent===window) return;
+  window.parent.postMessage({source:"copilotkit-campaign",campaign:"scorecard",event,properties},location.origin);
+}
+function markScorecardStarted(){
+  if(scorecardStarted) return;
+  scorecardStarted = true;
+  emitCampaignEvent("scorecard_started");
+}
 
 /* ---------- Question model ---------- */
 const RUNGS = [
@@ -354,7 +440,7 @@ RUNGS.forEach(r=>{
       return `<button class="opt ${na}" type="button" aria-pressed="false"
         data-q="${q.id}" data-i="${i}">${o[0]}</button>`;
     }).join("");
-    card.innerHTML=`<p class="stmt">${q.stmt}</p><div class="opts">${opts}</div>`;
+    card.innerHTML=`<p class="stmt" id="${q.id}-label">${q.stmt}</p><div class="opts" role="group" aria-labelledby="${q.id}-label">${opts}</div><p class="field-error" id="${q.id}-error" hidden>Choose an answer for this question.</p>`;
     sec.appendChild(card);
   });
   secWrap.appendChild(sec);
@@ -363,7 +449,13 @@ RUNGS.forEach(r=>{
 /* ---------- Interaction ---------- */
 document.querySelector("[data-seg]").addEventListener("click",e=>{
   const b=e.target.closest("[data-seg-val]"); if(!b) return;
+  markScorecardStarted();
   state.seg=b.dataset.segVal;
+  document.querySelector(".seg").classList.remove("err");
+  b.parentElement.removeAttribute("aria-invalid");
+  b.parentElement.removeAttribute("aria-describedby");
+  document.getElementById("segment-error").hidden=true;
+  emitCampaignEvent("scorecard_segment_selected",{segment:state.seg});
   b.parentElement.querySelectorAll(".opt").forEach(x=>x.setAttribute("aria-pressed","false"));
   b.setAttribute("aria-pressed","true");
   updateProgress();
@@ -371,11 +463,15 @@ document.querySelector("[data-seg]").addEventListener("click",e=>{
 
 secWrap.addEventListener("click",e=>{
   const b=e.target.closest(".opt"); if(!b) return;
+  markScorecardStarted();
   const qid=b.dataset.q, i=+b.dataset.i;
   const q=Q.find(x=>x.id===qid); const o=q.opts[i];
-  state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3]};
+  state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3], label:o[0]};
   const card=document.getElementById("card-"+qid);
   card.classList.remove("err");
+  card.querySelector(".opts").removeAttribute("aria-invalid");
+  card.querySelector(".opts").removeAttribute("aria-describedby");
+  document.getElementById(qid+"-error").hidden=true;
   card.querySelectorAll(".opt").forEach(x=>{x.setAttribute("aria-pressed","false");x.classList.remove("picked");});
   b.setAttribute("aria-pressed","true");
   void b.offsetWidth; b.classList.add("picked");
@@ -386,7 +482,10 @@ function answeredCount(){ return Object.keys(state.answers).length; }
 function updateProgress(){
   const n=answeredCount();
   document.getElementById("pcount").textContent = `${n} / 14 answered`;
-  document.getElementById("pfill").style.width = (n/14*100)+"%";
+  document.getElementById("pfill").style.transform = `scaleX(${n/14})`;
+  const progress=document.querySelector(".progress .bar");
+  progress.setAttribute("aria-valuenow",String(n));
+  progress.setAttribute("aria-valuetext",`${n} of 14 questions answered`);
   RUNGS.forEach(r=>{
     const done = Q.filter(q=>q.rung===r.n).every(q=>state.answers[q.id]);
     const chip = document.getElementById("chip-"+r.n);
@@ -450,7 +549,9 @@ function showResults(){
   arc.setAttribute("stroke-dasharray", C.toFixed(1));
   arc.style.stroke = t.cls==="t-good"?"var(--good)":t.cls==="t-mid"?"var(--warn)":"var(--bad)";
   arc.style.filter = t.cls==="t-good"?"drop-shadow(0 0 6px rgba(24,147,112,.35))":"";
-  requestAnimationFrame(()=>{ arc.style.strokeDashoffset = (C*(1-overall/100)).toFixed(1); });
+  const ringOffset=(C*(1-overall/100)).toFixed(1);
+  if(prefersReducedMotion()) arc.style.strokeDashoffset=ringOffset;
+  else requestAnimationFrame(()=>{ arc.style.strokeDashoffset=ringOffset; });
   animateNum(document.getElementById("scoreNum"), overall);
 
   const tierEl=document.getElementById("tier");
@@ -470,10 +571,12 @@ function showResults(){
     el.innerHTML=`<div class="rn">0${p.n}</div>
       <div class="rname">${p.name}<small>${p.why}</small></div>
       <div class="pct"><span class="st ${st[0]}">${st[1]}</span>${pct}%</div>
-      <div class="track" style="grid-column:2/3"><div class="tk" style="width:0;background:${barColor(p.score)};transition:width .7s cubic-bezier(.22,1,.36,1) ${i*90}ms"></div></div>
+      <div class="track" style="grid-column:2/3"><div class="tk" style="background:${barColor(p.score)};transition:transform .7s cubic-bezier(.22,1,.36,1) ${i*90}ms"></div></div>
       ${tag}`;
     lad.appendChild(el);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.querySelector(".tk").style.width=pct+"%"; }));
+    const track=el.querySelector(".tk");
+    if(prefersReducedMotion()) track.style.transform=`scaleX(${p.score})`;
+    else requestAnimationFrame(()=>requestAnimationFrame(()=>{ track.style.transform=`scaleX(${p.score})`; }));
   });
 
   // hidden-tax callout
@@ -493,13 +596,27 @@ function showResults(){
 
   // wire CTAs with this run's summary
   const summary = buildSummary({overall, per, weak, flags});
-  document.getElementById("copyBtn").onclick=()=>copy(summary);
+  saveResults({overall, per, weak, flags, t, summary});
   document.getElementById("emailBtn").onclick=()=>{
+    emitCampaignEvent("scorecard_results_email_clicked",{score:overall,segment:state.seg,tier:t.label});
     const subj=encodeURIComponent(`CopilotKit Production Readiness — ${overall}/100`);
     const body=encodeURIComponent(summary+"\n\nWhat I'd like help with:\n");
     location.href=`mailto:${REPLY_TO}?subject=${subj}&body=${body}`;
   };
-  window.scrollTo({top:0,behavior:"smooth"});
+  document.getElementById("copyBtn").onclick=async()=>{
+    if(await copy(summary)){
+      emitCampaignEvent("scorecard_results_copied",{score:overall,segment:state.seg,tier:t.label});
+    }
+  };
+  emitCampaignEvent("scorecard_completed",{
+    score:overall,
+    segment:state.seg,
+    tier:t.label,
+    weakest_rung:weak.n,
+    maintained_layer_count:flags.length,
+  });
+  tierEl.focus({preventScroll:true});
+  scrollToPageTop();
 }
 
 function buildSummary({overall, per, weak, flags}){
@@ -515,17 +632,29 @@ function buildSummary({overall, per, weak, flags}){
 }
 
 function animateNum(el,to){
+  if(prefersReducedMotion()){el.textContent=to;return;}
   let s=0; const step=Math.max(1,Math.round(to/40));
   const t=setInterval(()=>{ s+=step; if(s>=to){s=to;clearInterval(t);} el.textContent=s; },18);
 }
-function copy(txt){
-  navigator.clipboard?.writeText(txt).then(()=>toast("Copied your results."),()=>fallbackCopy(txt));
-  if(!navigator.clipboard) fallbackCopy(txt);
+async function copy(txt){
+  if(navigator.clipboard){
+    try{
+      await navigator.clipboard.writeText(txt);
+      toast("Copied your results.");
+      return true;
+    }catch(e){
+      return fallbackCopy(txt);
+    }
+  }
+  return fallbackCopy(txt);
 }
 function fallbackCopy(txt){
   const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();
-  try{document.execCommand("copy");toast("Copied your results.");}catch(e){toast("Press ⌘/Ctrl+C to copy.");}
+  let copied=false;
+  try{copied=document.execCommand("copy");}catch(e){copied=false;}
+  toast(copied?"Copied your results.":"Press ⌘/Ctrl+C to copy.");
   ta.remove();
+  return copied;
 }
 let toastT;
 function toast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");
@@ -533,23 +662,52 @@ function toast(m){const el=document.getElementById("toast");el.textContent=m;el.
 
 /* ---------- Submit / retake ---------- */
 document.getElementById("seeResults").addEventListener("click",()=>{
-  if(!state.seg){ toast("Pick where your runtime is today."); document.querySelector(".seg").scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  if(!state.seg){
+    const segment=document.querySelector(".seg");
+    const segmentGroup=document.querySelector("[data-seg]");
+    segment.classList.add("err");
+    segmentGroup.setAttribute("aria-invalid","true");
+    segmentGroup.setAttribute("aria-describedby","segment-error");
+    document.getElementById("segment-error").hidden=false;
+    toast("Pick where your runtime is today.");
+    revealFocusedElement(segmentGroup.querySelector("button"));
+    return;
+  }
   const missing=Q.filter(q=>!state.answers[q.id]);
   if(missing.length){
-    missing.forEach(q=>document.getElementById("card-"+q.id).classList.add("err"));
-    document.getElementById("card-"+missing[0].id).scrollIntoView({behavior:"smooth",block:"center"});
+    missing.forEach(q=>{
+      const card=document.getElementById("card-"+q.id);
+      card.classList.add("err");
+      card.querySelector(".opts").setAttribute("aria-invalid","true");
+      card.querySelector(".opts").setAttribute("aria-describedby",q.id+"-error");
+      document.getElementById(q.id+"-error").hidden=false;
+    });
     toast(`${missing.length} question${missing.length===1?"":"s"} left.`);
+    revealFocusedElement(document.querySelector(`#card-${missing[0].id} .opt`));
     return;
   }
   showResults();
 });
 document.getElementById("retake").addEventListener("click",()=>{
+  emitCampaignEvent("scorecard_retaken");
   document.getElementById("results").style.display="none";
   document.getElementById("form").style.display="block";
-  window.scrollTo({top:0,behavior:"smooth"});
+  toast("Questionnaire ready.");
+  document.getElementById("segment-question").focus({preventScroll:true});
+  scrollToPageTop();
 });
 
 updateProgress();
+function wireScorecardLinks(){
+  document.querySelectorAll(".dockbtn, .brand").forEach(link=>{
+    link.addEventListener("click",()=>emitCampaignEvent("scorecard_link_clicked",{
+      destination:link.href,
+      link_text:(link.textContent||link.getAttribute("aria-label")||"").trim(),
+    }));
+  });
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",wireScorecardLinks,{once:true});
+else wireScorecardLinks();
 </script>
 
 <nav class="dock" aria-label="Quick links">

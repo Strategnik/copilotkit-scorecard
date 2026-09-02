@@ -53,11 +53,30 @@ Static files only — host however the site serves static assets:
 
 No env vars, no server routes, no dependencies to install.
 
-## Optional: capture completions server-side
-Today, lead capture is the mailto reply (zero infra). If you want silent analytics on
-completion/score, add one line in `showResults()` to POST the summary to your endpoint or
-fire an analytics event (e.g. `posthog.capture('scorecard_completed', {...})`). Hook point
-is already isolated in `buildSummary()`.
+## HubSpot capture (added 2026-09-01)
+On "See results," the page silently submits the full diagnostic to HubSpot form
+`0eaf83fd-4bf2-418e-9d37-afcbfc9ee729` ("Scorecard · Production Readiness Results
+(silent capture)", portal 45532593) — score, tier, segment, weakest rung, maintained
+layers, and every one of the 14 answers verbatim (`cpk_scorecard_*` contact properties,
+group "Scorecard · Production Readiness").
+
+- **Identity:** the visitor's email comes from the page's own `?email=` param, or — when
+  embedded same-origin (the site's `/scorecard` iframe wrapper) — from the parent page's
+  `?email=` param. Email links must therefore append `?email={{ contact.email }}`.
+- **No email → nothing recorded** (results still render; matches the preference page's
+  forwarded-email behavior). Capture is best-effort: a failed POST never blocks the UX.
+- The `hubspotutk` cookie is polled for 2s and attached so submissions tie to the
+  contact's analytics history. `createNewContactForNewEmail` is off — unknown emails
+  don't create junk contacts.
+- Retakes that produce a changed result submit again (latest wins on the contact);
+  identical re-renders are deduped client-side.
+
+The "Email my results" mailto and copy-to-clipboard flows are unchanged on top of this.
+
+This file is the canonical source; the live page is served from CopilotKit's website
+repo at `/campaign-pages/scorecard/index.html` inside the `/scorecard` route's iframe —
+hand them this file to update the deploy. (Current canonical = their deployed version
+(a11y + PostHog upgrades) + the capture patch.)
 
 ## Deployed (interim)
 Live on Vercel for the nurture launch:
