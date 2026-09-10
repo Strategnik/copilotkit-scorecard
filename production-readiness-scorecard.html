@@ -165,6 +165,27 @@
 
   .cta{margin:24px 0 0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .rfoot{margin:18px 0 0;color:var(--faint);font-size:12.5px}
+  /* next step — chosen by segment */
+  .next{margin:22px 0 0;padding:18px 20px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);position:relative;overflow:hidden}
+  .next::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,var(--lilac),var(--mint))}
+  .next h3{margin:0 0 4px;font-size:17px;font-weight:600}
+  .next p{margin:0 0 12px;color:var(--muted);font-size:14px;line-height:1.5}
+  .next .cta{margin:0}
+  .next .cta a{text-decoration:none}
+  /* use case chips */
+  .uc{margin:18px 0 0}
+  .uc h4{margin:0 0 8px;font-size:14px;font-weight:600}
+  .uc h4 small{font-weight:400;color:var(--muted);margin-left:6px}
+  .uc .opt[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  /* save to inbox */
+  .save{display:none;margin:18px 0 0;padding:16px 18px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .save[data-show="1"]{display:block}
+  .save label{display:block;font-size:14px;font-weight:600;margin-bottom:8px}
+  .saverow{display:flex;gap:10px;flex-wrap:wrap}
+  .saverow input{flex:1 1 240px;min-width:0;height:44px;border:1px solid var(--line2);border-radius:9999px;padding:0 16px;font:inherit;font-size:14px;color:var(--ink);background:var(--bg)}
+  .saverow input:focus{outline:2px solid var(--lilac);border-color:var(--lilac)}
+  .saverow input[aria-invalid="true"]{border-color:var(--bad)}
+  .savehint{margin:8px 0 0;font-size:12.5px;color:var(--faint)}
   .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);opacity:0;
     background:var(--ink);border:1px solid var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13.5px;
     transition:.25s;pointer-events:none;z-index:50}
@@ -276,6 +297,32 @@
         <div class="flags" id="taxFlags"></div>
       </div>
 
+      <div class="next" id="nextStep">
+        <h3 id="nextTitle"></h3>
+        <p id="nextCopy"></p>
+        <div class="cta" id="nextCtas"></div>
+      </div>
+
+      <div class="uc" id="useCase">
+        <h4>What are you building? <small>One click — we'll tailor what we send.</small></h4>
+        <div class="opts" role="group" aria-label="What are you building?">
+          <button class="opt" type="button" data-uc="t1_agent_native_canvas">Agent-native canvas</button>
+          <button class="opt" type="button" data-uc="t2_generative_ui">Generative UI</button>
+          <button class="opt" type="button" data-uc="t3_multi_agent">Multi-agent</button>
+          <button class="opt" type="button" data-uc="t4_agents_in_chat">Agents in Slack / Teams</button>
+          <button class="opt" type="button" data-uc="t5_vertical_lob">A vertical / LOB copilot</button>
+        </div>
+      </div>
+
+      <form class="save" id="saveForm" novalidate>
+        <label for="saveEmail">Save these results to your inbox</label>
+        <div class="saverow">
+          <input id="saveEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" maxlength="320">
+          <button class="btn" id="saveBtn" type="submit">Save</button>
+        </div>
+        <p class="savehint" id="saveHint">Your score, weakest rung, and what to fix first. Nothing else.</p>
+      </form>
+
       <div class="cta">
         <button class="btn" id="emailBtn" type="button">Email my results to the team</button>
         <button class="btn ghost" id="copyBtn" type="button">Copy my results</button>
@@ -293,21 +340,27 @@
 <script>
 /* ---------- CONFIG (edit before shipping) ---------- */
 const REPLY_TO = "hello@copilotkit.ai";   // where "Email my results" sends
+const BOOK_URL = "https://www.copilotkit.ai/talk-to-an-engineer";  // 20-min call link
+const DOJO_URL = "https://dojo.showcase.copilotkit.ai/";
+/* ---------- HubSpot capture (portal 45532593) ----------
+   On "See results" the score, tier, segment, weakest rung, and the use case (if chosen)
+   are written silently to the "Scorecard · Production Readiness Results" form. Email is
+   optional: a visitor the HubSpot cookie already knows is stitched without typing; an
+   unknown visitor can add an email via "Save these results to your inbox". Paid
+   attribution (utm_source / utm_content / landing path) rides along. ?demo=1 disables. */
 const PORTAL_ID = "45532593";
 const FORM_GUID = "0eaf83fd-4bf2-418e-9d37-afcbfc9ee729"; // Scorecard · Production Readiness Results (silent capture)
 const HUBSPOT_COOKIE_WAIT_MS = 2000;
 const HUBSPOT_COOKIE_POLL_MS = 100;
-/* Recipient email: own ?email= param, else the parent page URL (same-origin iframe).
-   No email -> results stay local, nothing is recorded (matches the preference page). */
-function resolveVisitorEmail(){
-  let raw = new URLSearchParams(location.search).get("email");
-  if(!raw && window.parent!==window){
-    try{ raw = new URLSearchParams(window.parent.location.search).get("email"); }catch(e){}
+const demoMode = new URLSearchParams(location.search).get("demo") === "1";
+function pageContext(){
+  let search=location.search, path=location.pathname, uri=location.href;
+  if(window.parent!==window){
+    try{ search=window.parent.location.search; path=window.parent.location.pathname; uri=window.parent.location.href; }catch(e){}
   }
-  const e=(raw||"").trim().toLowerCase();
-  return (e && e.length<=320) ? e : "";
+  const q=new URLSearchParams(search);
+  return {uri, path, platform:(q.get("utm_source")||"").slice(0,80), concept:(q.get("utm_content")||"").slice(0,80)};
 }
-const visitorEmail = resolveVisitorEmail();
 function readHubspotCookie(){
   return document.cookie.match(/(?:^|; )hubspotutk=([^;]+)/)?.[1] || null;
 }
@@ -316,7 +369,7 @@ async function waitForHubspotCookie(){
   if(existing) return existing;
   const deadline=Date.now()+HUBSPOT_COOKIE_WAIT_MS;
   while(Date.now()<deadline){
-    await new Promise(r=>setTimeout(r,HUBSPOT_COOKIE_POLL_MS));
+    await new Promise(resolve=>setTimeout(resolve,HUBSPOT_COOKIE_POLL_MS));
     const hutk=readHubspotCookie();
     if(hutk) return hutk;
   }
@@ -324,38 +377,64 @@ async function waitForHubspotCookie(){
 }
 const TIER_VALUES={"Production-hardened":"production_hardened","Mostly there, with gaps":"mostly_there",
   "Exposed at scale":"exposed_at_scale","Fragile under load":"fragile_under_load"};
-let lastSavedPayload = null;
-async function saveResults({overall, per, weak, flags, t, summary}){
-  if(!visitorEmail) return;
-  const detailLines=[summary,"","Answers:"];
-  Q.forEach(q=>{
-    const a=state.answers[q.id];
-    detailLines.push(`${q.id}. ${q.stmt} -> ${a && a.label ? a.label : "(unanswered)"}`);
-  });
+let savedEmail = "";
+let lastSavedKey = null;
+let lastRun = null;
+async function saveResults(){
+  if(!lastRun) return;
+  const {overall, weak, flags, t} = lastRun;
   const perfect = weak.score > 0.999;
+  const ctx=pageContext();
   const fields=[
-    {name:"email", value:visitorEmail},
-    {name:"cpk_scorecard_score", value:String(overall)},
-    {name:"cpk_scorecard_tier", value:TIER_VALUES[t.label]||t.label},
-    {name:"cpk_scorecard_segment", value:state.seg},
-    {name:"cpk_scorecard_weakest_rung", value:perfect ? "none" : ("rung_"+weak.n)},
-    {name:"cpk_scorecard_maintained_layers", value:flags.join(", ")},
-    {name:"cpk_scorecard_results_detail", value:detailLines.join("\n")},
+    {objectTypeId:"0-1", name:"cpk_scorecard_score", value:String(overall)},
+    {objectTypeId:"0-1", name:"cpk_scorecard_tier", value:TIER_VALUES[t.label]||t.label},
+    {objectTypeId:"0-1", name:"cpk_scorecard_segment", value:state.seg},
+    {objectTypeId:"0-1", name:"cpk_scorecard_weakest_rung", value:perfect ? "none" : ("rung_"+weak.n)},
+    {objectTypeId:"0-1", name:"cpk_scorecard_maintained_layers", value:flags.join(", ")},
+    {objectTypeId:"0-1", name:"cpk_last_landing_page", value:ctx.path.slice(0,200)},
   ];
+  if(savedEmail) fields.push({objectTypeId:"0-1", name:"email", value:savedEmail});
+  if(state.useCase) fields.push({objectTypeId:"0-1", name:"nurture_use_case", value:state.useCase});
+  if(ctx.platform) fields.push({objectTypeId:"0-1", name:"cpk_paid_platform", value:ctx.platform});
+  if(ctx.concept) fields.push({objectTypeId:"0-1", name:"cpk_paid_concept", value:ctx.concept});
   const key=JSON.stringify(fields);
-  if(key===lastSavedPayload) return;      // same run re-rendered — skip duplicate
+  if(key===lastSavedKey) return;
   const hutk=await waitForHubspotCookie();
-  const context={pageUri:window.parent===window?location.href:window.parent.location.href,
-                 pageName:"Production Readiness Scorecard — CopilotKit"};
+  if(!hutk && !savedEmail) return;            // nothing to stitch to yet — the save form asks for an email
+  const context={pageUri:ctx.uri, pageName:"Production Readiness Scorecard — CopilotKit"};
   if(hutk) context.hutk=hutk;
+  if(demoMode){ lastSavedKey=key; return; }
   try{
-    const res=await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${PORTAL_ID}/${FORM_GUID}`,{
+    const res=await fetch(`https://api-na2.hsforms.com/submissions/v3/integration/submit/${PORTAL_ID}/${FORM_GUID}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({fields, context})});
-    if(res.ok) lastSavedPayload=key;
-  }catch(e){/* capture is best-effort; results UX never blocks on it */}
+    if(res.ok){ lastSavedKey=key; emitCampaignEvent("scorecard_saved",{segment:state.seg,identified:!!hutk,with_email:!!savedEmail,use_case:state.useCase||null}); }
+    else emitCampaignEvent("scorecard_save_failed",{status:res.status});
+  }catch(e){ emitCampaignEvent("scorecard_save_failed",{status:0}); }
 }
-const BOOK_URL = "https://www.copilotkit.ai/talk-to-an-engineer";  // 20-min call link
+/* Next step by segment: production/staging teams get the engineer first; prototypes get pushed to build. */
+function renderNextStep(overall, t){
+  const seg=state.seg;
+  const inProdOrStaging = seg==="prod" || seg==="staging";
+  const title=document.getElementById("nextTitle"), copy=document.getElementById("nextCopy"), ctas=document.getElementById("nextCtas");
+  ctas.innerHTML="";
+  const mk=(label, href, primary, dest)=>{
+    const a=document.createElement("a"); a.className="btn"+(primary?"":" ghost"); a.href=href; a.target="_top"; a.textContent=label;
+    a.addEventListener("click",()=>emitCampaignEvent("scorecard_next_step_clicked",{segment:seg,destination:dest,score:overall,tier:t.label}));
+    return a;
+  };
+  if(inProdOrStaging){
+    title.textContent = seg==="prod" ? "You're live. Let's close the gaps before traffic finds them." : "Before this hits production, walk it through with an engineer.";
+    copy.textContent = "Twenty minutes with a CopilotKit engineer on your weakest rung — what to change, in what order, and what the runtime already covers.";
+    ctas.appendChild(mk("Talk to an engineer", BOOK_URL, true, "engineer"));
+    ctas.appendChild(mk("Open the Dojo", DOJO_URL, false, "dojo"));
+  } else {
+    title.textContent = "Keep building — the rungs above are what to design for.";
+    copy.textContent = "The Dojo has runnable examples of every pattern, wired the production-safe way. When you're heading to staging, an engineer can review your setup.";
+    ctas.appendChild(mk("Open the Dojo", DOJO_URL, true, "dojo"));
+    ctas.appendChild(mk("Talk to an engineer", BOOK_URL, false, "engineer"));
+  }
+}
 let scorecardStarted = false;
 const reducedMotionQuery=typeof window.matchMedia==="function"
   ? window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -421,7 +500,7 @@ const Q = [
     opts:[["Yes",0],["Partly",0.5],["No",1]]},
 ];
 
-const state = { seg:null, answers:{} }; // answers[id] = {risk, tax|null, na}
+const state = { seg:null, answers:{}, useCase:null }; // answers[id] = {risk, tax|null, na}
 
 /* ---------- Render sections ---------- */
 const secWrap = document.getElementById("sections");
@@ -466,7 +545,7 @@ secWrap.addEventListener("click",e=>{
   markScorecardStarted();
   const qid=b.dataset.q, i=+b.dataset.i;
   const q=Q.find(x=>x.id===qid); const o=q.opts[i];
-  state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3], label:o[0]};
+  state.answers[qid]={risk:o[1], tax:o[2]||null, na:!!o[3]};
   const card=document.getElementById("card-"+qid);
   card.classList.remove("err");
   card.querySelector(".opts").removeAttribute("aria-invalid");
@@ -594,9 +673,14 @@ function showResults(){
   document.getElementById("rfoot").textContent =
     `Segment: ${segLabel()} · ` + (perfect ? "All five rungs at 100%" : `Weakest rung: 0${weak.n} ${weak.name}`);
 
+  // next step by segment, then silent capture
+  lastRun={overall, per, weak, flags, t};
+  renderNextStep(overall, t);
+  document.getElementById("saveForm").dataset.show = savedEmail ? "0" : "1";
+  saveResults();
+
   // wire CTAs with this run's summary
   const summary = buildSummary({overall, per, weak, flags});
-  saveResults({overall, per, weak, flags, t, summary});
   document.getElementById("emailBtn").onclick=()=>{
     emitCampaignEvent("scorecard_results_email_clicked",{score:overall,segment:state.seg,tier:t.label});
     const subj=encodeURIComponent(`CopilotKit Production Readiness — ${overall}/100`);
@@ -695,6 +779,27 @@ document.getElementById("retake").addEventListener("click",()=>{
   toast("Questionnaire ready.");
   document.getElementById("segment-question").focus({preventScroll:true});
   scrollToPageTop();
+});
+
+document.querySelectorAll("#useCase [data-uc]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("#useCase [data-uc]").forEach(b=>b.setAttribute("aria-pressed", b===btn ? "true" : "false"));
+    state.useCase=btn.dataset.uc;
+    emitCampaignEvent("scorecard_use_case_selected",{use_case:state.useCase,segment:state.seg});
+    saveResults();
+  });
+});
+document.getElementById("saveForm").addEventListener("submit", async(ev)=>{
+  ev.preventDefault();
+  const input=document.getElementById("saveEmail");
+  const email=input.value.trim().toLowerCase();
+  const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length<=320;
+  if(!valid){ input.setAttribute("aria-invalid","true"); input.focus(); return; }
+  input.removeAttribute("aria-invalid");
+  savedEmail=email;
+  await saveResults();
+  document.getElementById("saveForm").dataset.show="0";
+  toast("Saved to your inbox.");
 });
 
 updateProgress();
