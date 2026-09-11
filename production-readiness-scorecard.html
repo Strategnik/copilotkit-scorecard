@@ -13,9 +13,11 @@
   mailto to REPLY_TO with the score summary as the body, so a reply hands you
   the prospect's full diagnostic + segment.
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Self-hosted brand faces (same files the site uses) — no third-party font request. */
+  @font-face{font-family:"Plus Jakarta Sans";src:url("fonts/PlusJakartaSans-VariableFont_wght.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
+  @font-face{font-family:"Spline Sans Mono";src:url("fonts/SplineSansMono-VariableFont_wght.woff2") format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
+</style>
 <style>
   /* CopilotKit brand tokens — internal-skills copilotkit-branding / copilotkit-ui-theme */
   :root{
@@ -372,14 +374,25 @@ function privacyRegime(){
   return (v==="ccpa" || v==="none") ? v : "gdpr";
 }
 const REGIME = privacyRegime();
-const REGULATED = REGIME !== "none";
+const REGULATED = REGIME !== "none";      // consent block + explicit opt-in (GDPR and CCPA)
+const NO_STITCH = REGIME === "gdpr";      // HubSpot cookie stitching withheld under GDPR only
+const UTM_KEY="cpk_campaign_utm";
+function storeInboundUtm(){
+  let search=location.search;
+  if(window.parent!==window){ try{ search=window.parent.location.search; }catch(e){} }
+  const q=new URLSearchParams(search); const utm={};
+  q.forEach((v,k)=>{ if(/^utm_/i.test(k)) utm[k.toLowerCase()]=v.slice(0,80); });
+  try{ if(Object.keys(utm).length) sessionStorage.setItem(UTM_KEY, JSON.stringify(utm)); }catch(e){}
+}
+function storedUtm(){ try{ return JSON.parse(sessionStorage.getItem(UTM_KEY)||"{}"); }catch(e){ return {}; } }
+storeInboundUtm();
 function pageContext(){
   let search=location.search, path=location.pathname, uri=location.href;
   if(window.parent!==window){
     try{ search=window.parent.location.search; path=window.parent.location.pathname; uri=window.parent.location.href; }catch(e){}
   }
-  const q=new URLSearchParams(search);
-  return {uri, path, platform:(q.get("utm_source")||"").slice(0,80), concept:(q.get("utm_content")||"").slice(0,80)};
+  const q=new URLSearchParams(search); const st=storedUtm();
+  return {uri, path, platform:(q.get("utm_source")||st.utm_source||"").slice(0,80), concept:(q.get("utm_content")||st.utm_content||"").slice(0,80)};
 }
 function readHubspotCookie(){
   return document.cookie.match(/(?:^|; )hubspotutk=([^;]+)/)?.[1] || null;
@@ -421,7 +434,7 @@ async function saveResults(){
   if(ctx.concept) fields.push({objectTypeId:"0-1", name:"cpk_paid_concept", value:ctx.concept});
   const key=JSON.stringify(fields);
   if(key===lastSavedKey) return;
-  const hutk = REGULATED ? null : await waitForHubspotCookie();
+  const hutk = NO_STITCH ? null : await waitForHubspotCookie();
   if(!hutk && !savedEmail) return;            // nothing to stitch to yet — the save form asks for an email
   const context={pageUri:ctx.uri, pageName:"Production Readiness Scorecard — CopilotKit"};
   if(hutk) context.hutk=hutk;
