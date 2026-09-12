@@ -167,6 +167,27 @@
 
   .cta{margin:24px 0 0;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .rfoot{margin:18px 0 0;color:var(--faint);font-size:12.5px}
+  /* PDF request modal */
+  .modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px}
+  .modal[hidden]{display:none}
+  .modal-backdrop{position:absolute;inset:0;background:rgba(1,5,7,.45)}
+  .modal-card{position:relative;width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--elev-lg);padding:26px 26px 22px}
+  .modal-x{position:absolute;top:12px;right:12px;appearance:none;border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--faint);width:32px;height:32px;border-radius:50%}
+  .modal-x:hover{background:#f0f0f4;color:var(--ink)}
+  .modal-card .eyebrow{border-top:0;padding-top:0;margin:0 0 8px}
+  .modal-card h3{margin:6px 0 6px;font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .modal-copy{margin:0 0 16px;color:var(--muted);font-size:14.5px}
+  .modal-card label.field{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  .modal-card input[type=email]{width:100%;box-sizing:border-box;font:inherit;font-size:15px;padding:12px 14px;border:1px solid var(--line2);border-radius:10px;background:#fff}
+  .modal-card input[type=email]:focus{outline:2px solid var(--lilac);outline-offset:1px;border-color:var(--lilac)}
+  .modal-card input[aria-invalid=true]{border-color:var(--bad)}
+  .modal-card .consent{margin-top:12px}
+  .modal-card .btn{width:100%;margin-top:14px}
+  .modal-err{color:var(--bad);font-size:13px;margin:10px 0 0}
+  .modal-done p{color:var(--muted);font-size:14.5px;margin:0}
+  .modal-done a{color:var(--ink);font-weight:600}
+  @media (prefers-reduced-motion:no-preference){.modal-card{animation:pop .22s cubic-bezier(.22,1,.36,1)}}
+  @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
   /* next step — chosen by segment */
   .next{margin:22px 0 0;padding:18px 20px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);position:relative;overflow:hidden}
   .next::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,var(--lilac),var(--mint))}
@@ -336,7 +357,8 @@
       </form>
 
       <div class="cta">
-        <button class="btn" id="emailBtn" type="button">Email my results to the team</button>
+        <button class="btn" id="pdfBtn" type="button">Get my results as a PDF</button>
+        <button class="btn ghost" id="emailBtn" type="button">Email my results to the team</button>
         <button class="btn ghost" id="copyBtn" type="button">Copy my results</button>
         <button class="btn ghost" id="retake" type="button">Retake</button>
       </div>
@@ -347,6 +369,33 @@
   <p class="foot">CopilotKit — production scaling reference. This scorecard runs entirely client-side.</p>
 </div>
 
+<div class="modal" id="pdfModal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pdfTitle" aria-describedby="pdfDesc">
+    <button class="modal-x" id="pdfClose" type="button" aria-label="Close">×</button>
+    <div id="pdfAsk">
+      <p class="eyebrow">Your scorecard, as a PDF</p>
+      <h3 id="pdfTitle">Take these results to the team</h3>
+      <p class="modal-copy" id="pdfDesc">One page: your score, every rung, and what to fix first — laid out like the card above. Enter your work email and the download starts.</p>
+      <form id="pdfForm" novalidate>
+        <label class="field" for="pdfEmail">Work email</label>
+        <input id="pdfEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" maxlength="320">
+        <div class="consent" id="pdfConsent" hidden>
+          <label class="consent-row"><input type="checkbox" id="pdfOptIn"> <span>Also send me follow-ups on production readiness from CopilotKit. Unsubscribe anytime.</span></label>
+          <p class="consent-note">By requesting the PDF, you agree that CopilotKit stores your email to deliver it. <a href="https://www.copilotkit.ai/privacy-policy" target="_top">Privacy policy</a>.</p>
+        </div>
+        <p class="consent-note" id="pdfPrivacy"><a href="https://www.copilotkit.ai/privacy-policy" target="_top">Privacy policy</a></p>
+        <button class="btn" id="pdfSend" type="submit">Get my PDF</button>
+        <p class="modal-err" id="pdfError" role="alert" hidden>That didn't go through. Try again.</p>
+      </form>
+    </div>
+    <div class="modal-done" id="pdfDone" hidden>
+      <p class="eyebrow">Done</p>
+      <h3 id="pdfDoneTitle" tabindex="-1">Your PDF is downloading.</h3>
+      <p>If it didn't start, <a id="pdfLink" href="#" download target="_top">download it here</a>. We've kept the link so we can resend it.</p>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">Copied.</div>
 
 <script>
@@ -411,10 +460,11 @@ async function waitForHubspotCookie(){
 const TIER_VALUES={"Production-hardened":"production_hardened","Mostly there, with gaps":"mostly_there",
   "Exposed at scale":"exposed_at_scale","Fragile under load":"fragile_under_load"};
 let savedEmail = "";
+let saving=false;
 let lastSavedKey = null;
 let lastRun = null;
-async function saveResults(){
-  if(!lastRun) return;
+async function saveResults({explicit=false, pdf=false}={}){
+  if(!lastRun) return false;
   const {overall, weak, flags, t} = lastRun;
   const perfect = weak.score > 0.999;
   const ctx=pageContext();
@@ -427,32 +477,38 @@ async function saveResults(){
     {objectTypeId:"0-1", name:"cpk_last_landing_page", value:ctx.path.slice(0,200)},
   ];
   if(savedEmail) fields.push({objectTypeId:"0-1", name:"email", value:savedEmail});
-  const optIn = REGULATED ? !!document.getElementById("saveOptIn")?.checked : true;
-  fields.push({objectTypeId:"0-1", name:"cpk_marketing_consent", value: REGULATED ? (optIn ? "granted" : "declined") : "not_required"});
+  if(pdf) fields.push({objectTypeId:"0-1", name:"cpk_scorecard_pdf_url", value:pdfUrl()});
+  /* Consent is something the visitor states, not a property of their region. The save form's submit is
+     the only user action here, so only that path records cpk_marketing_consent and HubSpot's legal-consent
+     payload. The silent captures (results render, use-case chip) carry neither, in every regime — before
+     or after an explicit save: a silent save can neither assert nor downgrade a stored choice. */
+  const optIn = explicit && (REGULATED ? !!document.getElementById("saveOptIn")?.checked : true);
+  if(explicit) fields.push({objectTypeId:"0-1", name:"cpk_marketing_consent", value: REGULATED ? (optIn ? "granted" : "declined") : "not_required"});
   if(state.useCase) fields.push({objectTypeId:"0-1", name:"nurture_use_case", value:state.useCase});
   if(ctx.platform) fields.push({objectTypeId:"0-1", name:"cpk_paid_platform", value:ctx.platform});
   if(ctx.concept) fields.push({objectTypeId:"0-1", name:"cpk_paid_concept", value:ctx.concept});
   const key=JSON.stringify(fields);
-  if(key===lastSavedKey) return;
+  if(key===lastSavedKey) return true;
   const hutk = NO_STITCH ? null : await waitForHubspotCookie();
-  if(!hutk && !savedEmail) return;            // nothing to stitch to yet — the save form asks for an email
+  if(!hutk && !savedEmail) return false;      // nothing to stitch to yet — the save form asks for an email
   const context={pageUri:ctx.uri, pageName:"Production Readiness Scorecard — CopilotKit"};
   if(hutk) context.hutk=hutk;
   const body={fields, context};
-  if(REGULATED){
+  if(explicit && REGULATED){
     body.legalConsentOptions={consent:{
       consentToProcess:true,
       text:"I agree to allow CopilotKit to store and process my personal data to deliver my scorecard results.",
       communications:[{value:optIn, subscriptionTypeId:MARKETING_SUBSCRIPTION_TYPE_ID, text:"I agree to receive marketing information from CopilotKit."}]}};
   }
-  if(demoMode){ lastSavedKey=key; return; }
+  if(demoMode){ lastSavedKey=key; return true; }
   try{
     const res=await fetch(`https://api-na2.hsforms.com/submissions/v3/integration/submit/${PORTAL_ID}/${FORM_GUID}`,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify(body)});
-    if(res.ok){ lastSavedKey=key; emitCampaignEvent("scorecard_saved",{segment:state.seg,identified:!!hutk,with_email:!!savedEmail,use_case:state.useCase||null,regime:REGIME}); }
-    else emitCampaignEvent("scorecard_save_failed",{status:res.status});
+    if(res.ok){ lastSavedKey=key; emitCampaignEvent("scorecard_saved",{segment:state.seg,identified:!!hutk,with_email:!!savedEmail,use_case:state.useCase||null,regime:REGIME}); return true; }
+    emitCampaignEvent("scorecard_save_failed",{status:res.status});
   }catch(e){ emitCampaignEvent("scorecard_save_failed",{status:0}); }
+  return false;
 }
 /* Next step by segment: production/staging teams get the engineer first; prototypes get pushed to build. */
 function renderNextStep(overall, t){
@@ -831,7 +887,76 @@ document.querySelectorAll("#useCase [data-uc]").forEach(btn=>{
     saveResults();
   });
 });
-if(REGULATED){ document.getElementById("saveConsent").hidden=false; document.getElementById("savePrivacy").hidden=true; }
+if(REGULATED){ document.getElementById("saveConsent").hidden=false; document.getElementById("savePrivacy").hidden=true;
+  document.getElementById("pdfConsent").hidden=false; document.getElementById("pdfPrivacy").hidden=true; }
+
+/* ---------- PDF: the results card as a one-page document, behind an email ask ----------
+   The link carries only numbers (score, segment, per-rung %, flag ids); /api/scorecard/pdf
+   renders it from its own copy of the labels. The same link is written to the contact
+   (cpk_scorecard_pdf_url) so it can be re-sent. */
+const PDF_ROUTE="/api/scorecard/pdf";
+function b64url(str){ return btoa(unescape(encodeURIComponent(str))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function pdfPayload(){
+  const {overall, per, flags}=lastRun;
+  const payload={v:1, s:overall, seg:state.seg, p:per.map(p=>Math.round(p.score*100)), f:flags};
+  if(state.useCase) payload.u=state.useCase;
+  return payload;
+}
+function pdfUrl(){
+  // Framed on copilotkit.ai (or a preview of it): the parent's origin serves the route. Standalone
+  // previews of this document have no API, so they point at production.
+  let origin="https://www.copilotkit.ai";
+  try{ if(window.parent!==window) origin=window.parent.location.origin; }catch(e){}
+  return origin+PDF_ROUTE+"?r="+b64url(JSON.stringify(pdfPayload()));
+}
+const pdfModal=document.getElementById("pdfModal");
+const pdfEmail=document.getElementById("pdfEmail");
+let pdfOpener=null, pdfSending=false;
+function openPdfModal(){
+  if(!lastRun) return;
+  pdfOpener=document.activeElement;
+  document.getElementById("pdfAsk").hidden=false; document.getElementById("pdfDone").hidden=true;
+  document.getElementById("pdfError").hidden=true;
+  if(savedEmail && !pdfEmail.value) pdfEmail.value=savedEmail;
+  pdfModal.hidden=false; document.body.style.overflow="hidden";
+  emitCampaignEvent("scorecard_pdf_opened",{score:lastRun.overall,segment:state.seg,tier:lastRun.t.label});
+  pdfEmail.focus();
+}
+function closePdfModal(){
+  if(pdfModal.hidden) return;
+  pdfModal.hidden=true; document.body.style.overflow="";
+  if(pdfOpener && typeof pdfOpener.focus==="function") pdfOpener.focus();
+}
+document.getElementById("pdfBtn").addEventListener("click", openPdfModal);
+document.getElementById("pdfClose").addEventListener("click", closePdfModal);
+pdfModal.querySelector("[data-close]").addEventListener("click", closePdfModal);
+document.addEventListener("keydown", ev=>{ if(ev.key==="Escape") closePdfModal(); });
+document.getElementById("pdfForm").addEventListener("submit", async(ev)=>{
+  ev.preventDefault();
+  const email=pdfEmail.value.trim().toLowerCase();
+  const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length<=320;
+  if(!valid){ pdfEmail.setAttribute("aria-invalid","true"); pdfEmail.focus(); return; }
+  pdfEmail.removeAttribute("aria-invalid");
+  if(pdfSending) return;
+  pdfSending=true;
+  const sendBtn=document.getElementById("pdfSend"); sendBtn.disabled=true;
+  document.getElementById("pdfError").hidden=true;
+  const priorEmail=savedEmail;
+  savedEmail=email;                              // provisional: reverted unless HubSpot accepted it
+  // The modal's own opt-in box drives the consent record for this submission.
+  const saveOptIn=document.getElementById("saveOptIn"); if(saveOptIn) saveOptIn.checked=document.getElementById("pdfOptIn").checked;
+  const ok=await saveResults({explicit:true, pdf:true});
+  pdfSending=false; sendBtn.disabled=false;
+  if(!ok){ savedEmail=priorEmail; document.getElementById("pdfError").hidden=false; emitCampaignEvent("scorecard_pdf_failed",{score:lastRun.overall,segment:state.seg}); return; }
+  document.getElementById("saveForm").dataset.show="0";
+  const url=pdfUrl();
+  const link=document.getElementById("pdfLink"); link.href=url;
+  const a=document.createElement("a"); a.href=url; a.download=`copilotkit-production-readiness-${lastRun.overall}.pdf`; a.target="_top"; a.rel="noopener"; a.style.display="none";
+  document.body.appendChild(a); a.click(); a.remove();
+  emitCampaignEvent("scorecard_pdf_delivered",{score:lastRun.overall,segment:state.seg,tier:lastRun.t.label,use_case:state.useCase||null,regime:REGIME});
+  document.getElementById("pdfAsk").hidden=true; document.getElementById("pdfDone").hidden=false;
+  document.getElementById("pdfDoneTitle").focus();
+});
 document.getElementById("saveForm").addEventListener("submit", async(ev)=>{
   ev.preventDefault();
   const input=document.getElementById("saveEmail");
@@ -839,8 +964,16 @@ document.getElementById("saveForm").addEventListener("submit", async(ev)=>{
   const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length<=320;
   if(!valid){ input.setAttribute("aria-invalid","true"); input.focus(); return; }
   input.removeAttribute("aria-invalid");
-  savedEmail=email;
-  await saveResults();
+  if(saving) return;
+  saving=true;
+  const saveBtn=document.getElementById("saveBtn");
+  saveBtn.disabled=true;
+  const priorEmail=savedEmail;
+  savedEmail=email;                              // provisional: reverted unless HubSpot accepted it
+  const ok=await saveResults({explicit:true});
+  saving=false;
+  saveBtn.disabled=false;
+  if(!ok){ savedEmail=priorEmail; toast("That didn't save. Try again."); return; }
   document.getElementById("saveForm").dataset.show="0";
   toast("Saved to your inbox.");
 });
